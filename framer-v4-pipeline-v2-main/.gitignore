@@ -1,0 +1,43 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Pipeline-Artefakte (enthalten Client-Daten, nie committen)
+exports/
+v4-tree.json
+v4-tree-*.json
+build-manifest.json
+image-manifest.json
+image-map.json
+font-resolution.json
+responsive.json
+extracted-styles.json
+extracted-breakpoints.json
+token-mapping.json
+variables-plan.json
+gc-plan.json
+dependency-graph.json
+mcp-build-plan.json
+elementor-dump.json
+validate-report.json
+
+# Asset-Ordner
+assets/
+tokens/
+fonts/
+
+# Umgebungsvariablen
+.env
+.env.local
+.mcp.json
+
+# Temporaere Dateien
+*.tmp
+*.bak
+*.log
+tst.txt
+test.txt
+
+# OS
+.DS_Store
+Thumbs.db
