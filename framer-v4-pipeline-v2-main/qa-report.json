@@ -1,0 +1,60 @@
+{
+  "post_id": 4874,
+  "timestamp": "2026-06-06T19:40:12.206Z",
+  "overall_status": "errors",
+  "summary": {
+    "layout_issues": 11,
+    "visual_issues": 1,
+    "visual_raw": 1,
+    "page_issues": 0,
+    "variable_drift": 0,
+    "missing_breakpoints": 0,
+    "action_items": 1
+  },
+  "layout": {
+    "issues": [
+      {
+        "severity": "error",
+        "check": "deep_nesting",
+        "element_id": "5d09a5a",
+        "message": "Container on depth 4, limit is 3",
+        "suggestion": "Use CSS Grid on a higher container"
+      }
+    ],
+    "total_issues": 11
+  },
+  "visual": {
+    "issues": [
+      {
+        "severity": "info",
+        "type": "fixed_dimensions",
+        "element_id": "974314c",
+        "message": "Height: 523px is fixed and large"
+      }
+    ],
+    "total_raw": 1
+  },
+  "responsive": {
+    "missing_breakpoints": [],
+    "raw": {
+      "success": true,
+      "missing_breakpoints": []
+    }
+  },
+  "variables": {
+    "drift": [],
+    "unused": []
+  },
+  "page": {
+    "issues": []
+  },
+  "action_items": [
+    {
+      "priority": 1,
+      "type": "layout",
+      "element_id": "5d09a5a",
+      "fix": "Use CSS Grid on a higher container",
+      "ability": "novamira/adrians-patch-element-styles"
+    }
+  ]
+}

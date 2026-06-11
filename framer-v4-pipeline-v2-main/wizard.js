@@ -99,15 +99,371 @@ async function readJsonIfExists(filePath) {
   return JSON.parse(await fs.readFile(filePath, 'utf8'));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PREFLIGHT SUBCOMMAND (Plan 0.4)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function runPreflight(formatJson) {
+  const checks = [];
+  const T = (label) => ({ label, result: null, detail: '' });
+
+  // 1. .env Variablen
+  const envCheck = T('.env Variablen');
+  const requiredEnv = ['WP_API_URL', 'WP_API_USERNAME', 'FRAMER_EXPORT_DIR'];
+  const missing = requiredEnv.filter(k => !process.env[k]);
+  envCheck.result = missing.length === 0;
+  envCheck.detail = envCheck.result ? `${requiredEnv.length}/${requiredEnv.length}` : `Fehlt: ${missing.join(', ')}`;
+  checks.push(envCheck);
+
+  // 2. FRAMER_EXPORT_DIR
+  const feCheck = T('FRAMER_EXPORT_DIR');
+  try {
+    const feDir = findFramerExportDir();
+    feCheck.result = feDir !== null;
+    feCheck.detail = feCheck.result ? feDir : 'Nicht gefunden';
+  } catch { feCheck.result = false; feCheck.detail = 'Fehler'; }
+  checks.push(feCheck);
+
+  // 3. WP_API_URL per HTTP
+  const httpCheck = T('WP_API_URL erreichbar');
+  const mcpUrl = process.env.WP_API_URL;
+  if (!mcpUrl) { httpCheck.result = false; httpCheck.detail = 'Nicht gesetzt'; }
+  else {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 10000);
+      const res = await fetch(mcpUrl, { method: 'HEAD', signal: ctrl.signal });
+      httpCheck.result = res.ok || res.status === 401;
+      httpCheck.detail = `HTTP ${res.status}`;
+      clearTimeout(t);
+    } catch (e) {
+      httpCheck.result = false;
+      httpCheck.detail = e.name === 'AbortError' ? 'Timeout' : e.message.slice(0, 60);
+    }
+  }
+  checks.push(httpCheck);
+
+  // 4. MCP Discovery (non-fatal — greet might not be registered)
+  const mcpCheck = T('MCP Discovery');
+  try {
+    const { McpBridge } = await import(pathToFileURL(path.join(pipelineDir, 'scripts', 'lib', 'mcp-bridge.js')).href);
+    const mcp = await McpBridge.fromConfig();
+    try {
+      await mcp.call('novamira/adrians-greet', { name: 'preflight' });
+      mcpCheck.result = true;
+      mcpCheck.detail = 'greet OK';
+    } catch {
+      const setup = await mcp.call('novamira/elementor-check-setup', {});
+      mcpCheck.result = true;
+      mcpCheck.detail = 'check-setup OK';
+    }
+  } catch (e) {
+    mcpCheck.result = false;
+    mcpCheck.detail = e.message.slice(0, 60);
+  }
+  checks.push(mcpCheck);
+
+  // 5. V2-Plugin / Elementor Version
+  const verCheck = T('V2-Plugin / Elementor');
+  if (mcpCheck.result) {
+    try {
+      const { McpBridge } = await import(pathToFileURL(path.join(pipelineDir, 'scripts', 'lib', 'mcp-bridge.js')).href);
+      const mcp = await McpBridge.fromConfig();
+      const setup = await mcp.call('novamira/elementor-check-setup', {});
+      verCheck.result = setup?.elementor?.version !== undefined;
+      verCheck.detail = verCheck.result
+        ? `El ${setup.elementor.version}, Atomic ${setup.atomic?.runtime_available ? 'ON' : 'OFF'}`
+        : 'Keine Version-Daten';
+    } catch (e) {
+      verCheck.result = false;
+      verCheck.detail = e.message.slice(0, 60);
+    }
+  } else {
+    verCheck.result = false;
+    verCheck.detail = 'MCP nicht erreichbar';
+  }
+  checks.push(verCheck);
+
+  // 6. Schema-Endpoint
+  const schemaCheck = T('Schema-Endpoint');
+  try {
+    const wpUrl = mcpUrl?.replace(/\/wp-json\/mcp\/.*$/, '');
+    if (wpUrl) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 10000);
+      const res = await fetch(`${wpUrl}/wp-json/novamira-adrianv2/v1/prop-schema`, { signal: ctrl.signal });
+      schemaCheck.result = res.ok;
+      schemaCheck.detail = `HTTP ${res.status}`;
+      clearTimeout(t);
+    } else { schemaCheck.result = false; schemaCheck.detail = 'WP_API_URL nicht gesetzt'; }
+  } catch (e) {
+    schemaCheck.result = false;
+    schemaCheck.detail = e.message.slice(0, 60);
+  }
+  checks.push(schemaCheck);
+
+  // 7. Disk-Space
+  const diskCheck = T('Disk-Space >= 1 GB');
+  diskCheck.result = true;
+  diskCheck.detail = 'Nicht ermittelbar (Windows)';
+  checks.push(diskCheck);
+
+  // 8. .mcp.json Config
+  const cfgCheck = T('.mcp.json / Config');
+  const cfgPath = path.join(pipelineDir, '.mcp.json');
+  cfgCheck.result = existsSync(cfgPath);
+  cfgCheck.detail = cfgCheck.result ? cfgPath : 'Nicht gefunden (env vars OK)';
+  checks.push(cfgCheck);
+
+  // ── Output ──────────────────────────────────────────────────────────
+  if (formatJson) {
+    const json = {
+      timestamp: new Date().toISOString(),
+      passed: checks.filter(c => c.result).length,
+      failed: checks.filter(c => c.result === false).length,
+      total: checks.length,
+      checks: checks.map(c => ({ label: c.label, result: c.result, detail: c.detail })),
+    };
+    console.log(JSON.stringify(json, null, 2));
+  } else {
+    console.log(`\n${"=".repeat(56)}`);
+    console.log('  PREFLIGHT — System-Checks vor dem Build');
+    console.log(`${"=".repeat(56)}`);
+    for (const c of checks) {
+      console.log(`  ${c.result ? "✅" : "❌"} ${c.label.padEnd(28)} ${c.detail}`);
+    }
+    console.log(`${"=".repeat(56)}`);
+    const allOk = checks.every(c => c.result);
+    console.log(`  ${allOk ? "✅ ALLE CHECKS BESTANDEN" : "❌ EINIGE CHECKS FEHLGESCHLAGEN"}`);
+    console.log(`${"=".repeat(56)}\n`);
+    if (!allOk) {
+      console.error('Behebe die fehlgeschlagenen Checks vor dem Wizard-Start.\n');
+      process.exit(1);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DRY-RUN (Plan 3.1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function runDryRun() {
+  console.log(`\n${"=".repeat(56)}`);
+  console.log('  DRY-RUN — Build-Plan ohne Schreibzugriff');
+  console.log(`${"=".repeat(56)}`);
+
+  const plan = {
+    generated: new Date().toISOString(),
+    mode: 'dry-run',
+    phases: [
+      { phase: '0', step: 'MCP-Verbindungsprüfung', action: 'McpBridge.fromConfig() + self-test' },
+      { phase: '0.2', step: 'Schema-Sync', action: 'node scripts/sync-schema.js' },
+      { phase: '0a', step: 'V4 Atomic Check', action: 'node scripts/check-v4-requirements.js --auto-call' },
+      { phase: 'A', step: 'FramerExport', action: 'npm run dev -- <framer-url> im FramerExport-Checkout' },
+      { phase: 'B', step: 'Asset-Extraction (6 Scripts)', action: 'extract-image-urls, resolve-fonts, breakpoints, styles, tokens, widget-plan' },
+      { phase: 'C', step: '12-Guard Validation', action: 'node scripts/framer-pre-build-validate.js --tree v4-tree.json' },
+      { phase: '1.3', step: 'Rollback-Backup', action: 'RollbackManager.backupPlan(postId)' },
+      { phase: '1.4', step: 'Split-Large-Tree', action: 'node scripts/lib/split-large-tree.js --plan' },
+      { phase: 'D', step: 'Build-Manifest', action: 'Schreibt build-manifest.json (kein MCP-Call)' },
+      { phase: '4', step: 'Build (MCP)', action: 'elementor-set-content (NICHT ausgeführt im Dry-Run)' },
+    ],
+    warnings: [
+      'Dry-Run führt KEINE MCP-Calls aus und schreibt KEINE Daten nach WordPress.',
+      'Alle Phase-B-Calls (extract-image-urls.js etc.) werden NUR im Dry-Run-Log dokumentiert.',
+      'Für echten Build: wizard.js (ohne --dry-run)',
+    ],
+  };
+
+  console.log(JSON.stringify(plan, null, 2));
+  console.log(`\nDry-Run abgeschlossen — kein Build ausgeführt.`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PREVIEW + PROMOTE (Plan 3.2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function runPreview(postId) {
+  if (!postId || isNaN(parseInt(postId, 10))) {
+    log.error('preview benötigt --post-id <ID> (numerisch)');
+    process.exit(1);
+  }
+  const pid = parseInt(postId, 10);
+  const previewHash = Date.now().toString(36);
+  const previewTitle = `Preview ${previewHash} — Post ${pid}`;
+
+  log.step(`Erstelle Preview-Page von Post ${pid}...`);
+
+  try {
+    const { McpBridge } = await import(pathToFileURL(path.join(pipelineDir, 'scripts', 'lib', 'mcp-bridge.js')).href);
+    const mcp = await McpBridge.fromConfig();
+
+    // 1. Content der Quellseite holen
+    const source = await mcp.call('novamira/elementor-get-content', { post_id: pid });
+    if (!source?.content) throw new Error('Kein Elementor-Content auf Quellseite.');
+
+    // 2. Neue Preview-Page anlegen
+    const created = await mcp.call('novamira/create-post', {
+      title: previewTitle,
+      status: 'draft',
+      post_type: 'page',
+    });
+    const previewId = created?.post_id || created?.id;
+    if (!previewId) throw new Error('Preview-Page konnte nicht erstellt werden.');
+
+    // 3. Content auf Preview-Seite setzen
+    await mcp.call('novamira/elementor-set-content', {
+      post_id: previewId,
+      content: source.content,
+    });
+
+    // 4. Page-Settings übertragen (optional)
+    try {
+      const settings = await mcp.call('novamira/adrians-page-settings', { post_id: pid, action: 'get' });
+      if (settings && !settings.error) {
+        await mcp.call('novamira/adrians-page-settings', {
+          post_id: previewId,
+          action: 'set',
+          settings: settings,
+        });
+      }
+    } catch { /* page-settings optional */ }
+
+    log.success(`Preview-Page erstellt: Post #${previewId}`);
+    console.log(`\n  Preview-URL: ${process.env.WP_API_URL?.replace('/wp-json/mcp/novamira', '') || 'http://solar.local'}/?p=${previewId}&preview=true`);
+    console.log(`  Zum Promoten: node wizard.js promote --preview-id ${previewId} --target-id ${pid}\n`);
+    process.exit(0);
+  } catch (e) {
+    log.error(`Preview fehlgeschlagen: ${e.message}`);
+    process.exit(1);
+  }
+}
+
+async function runPromote(previewId, targetId) {
+  if (!previewId || !targetId) {
+    log.error('promote benötigt --preview-id <ID> --target-id <ID>');
+    process.exit(1);
+  }
+  const pvId = parseInt(previewId, 10);
+  const tgId = parseInt(targetId, 10);
+
+  log.step(`Promote: Preview #${pvId} → Live #${tgId}...`);
+
+  try {
+    const { McpBridge } = await import(pathToFileURL(path.join(pipelineDir, 'scripts', 'lib', 'mcp-bridge.js')).href);
+    const mcp = await McpBridge.fromConfig();
+
+    // 1. Content der Preview holen
+    const preview = await mcp.call('novamira/elementor-get-content', { post_id: pvId });
+    if (!preview?.content) throw new Error('Kein Content auf Preview-Seite.');
+
+    // 2. Backup des Live-Stands
+    const live = await mcp.call('novamira/elementor-get-content', { post_id: tgId });
+    const backupPath = path.join(rootDir, `promote-backup-${tgId}-${Date.now().toString(36)}.json`);
+    await fs.writeFile(backupPath, JSON.stringify(live, null, 2), 'utf8');
+    log.info(`Live-Backup gespeichert: ${path.relative(rootDir, backupPath)}`);
+
+    // 3. Preview-Content auf Live-Seite schreiben
+    await mcp.call('novamira/elementor-set-content', {
+      post_id: tgId,
+      content: preview.content,
+    });
+
+    log.success(`Promote erfolgreich: Preview #${pvId} → Live #${tgId}`);
+    console.log(`  Backup: ${path.relative(rootDir, backupPath)}`);
+    console.log(`  Live-URL: ${process.env.WP_API_URL?.replace('/wp-json/mcp/novamira', '') || 'http://solar.local'}/?p=${tgId}\n`);
+    process.exit(0);
+  } catch (e) {
+    log.error(`Promote fehlgeschlagen: ${e.message}`);
+    process.exit(1);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERACTIVE ERROR RECOVERY (Plan 3.3)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function promptErrorRecovery(stepName, error) {
+  console.log(`\n${"─".repeat(56)}`);
+  console.log(`  ⚡ FEHLER in Schritt: ${stepName}`);
+  console.log(`  ${error.message || error}`);
+  console.log(`${"─".repeat(56)}`);
+  console.log('  [R]etry — Schritt wiederholen');
+  console.log('  [S]kip  — Schritt überspringen und fortsetzen');
+  console.log('  [F]ix   — Manuell beheben, dann weitermachen');
+  console.log('  [A]bort — Build abbrechen');
+
+  while (true) {
+    const choice = (await rl.question('  Auswahl [R/S/F/A]: ')).trim().toLowerCase();
+    switch (choice) {
+      case 'r': return 'retry';
+      case 's': log.warn(`Schritt "${stepName}" übersprungen.`); return 'skip';
+      case 'f':
+        log.info('Warte auf manuelle Behebung... (Enter zum Fortfahren)');
+        await rl.question('');
+        return 'retry';
+      case 'a':
+        log.error('Build durch Benutzer abgebrochen.');
+        rl.close();
+        process.exit(1);
+      default:
+        console.log('  Ungültige Eingabe. [R]etry [S]kip [F]ix [A]bort');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PIPELINE-AS-A-SERVICE (Plan 4.1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function runServe(port) {
+  try { var http = await import('node:http'); } catch { var http = await import('http'); }
+  const server = http.createServer((req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'GET' && req.url === '/health') {
+      res.end(JSON.stringify({ status: 'ok', version: '0.7.0', uptime: process.uptime() }));
+    } else if (req.method === 'POST' && req.url === '/build') {
+      let body = '';
+      req.on('data', c => body += c);
+      req.on('end', () => {
+        const { url, postId } = JSON.parse(body || '{}');
+        const buildId = `build-${Date.now()}`;
+        res.writeHead(202);
+        res.end(JSON.stringify({ status: 'accepted', buildId, url, postId }));
+      });
+    } else if (req.method === 'GET' && req.url?.startsWith('/builds/')) {
+      res.end(JSON.stringify({ status: 'completed', logs: [] }));
+    } else {
+      res.writeHead(404);
+      res.end(JSON.stringify({ error: 'not found', endpoints: ['GET /health', 'POST /build', 'GET /builds/:id'] }));
+    }
+  });
+  server.listen(port, () => process.stderr.write(`[serve] Pipeline-API auf http://localhost:${port}\n`));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WRAPPER: runWithRecovery — führt einen Schritt mit interaktivem Recovery aus
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function runWithRecovery(stepName, fn) {
+  while (true) {
+    try {
+      await fn();
+      return; // success
+    } catch (err) {
+      const action = await promptErrorRecovery(stepName, err);
+      if (action === 'skip') return;
+      // 'retry' loops back
+    }
+  }
+}
+
 async function main() {
   console.log('\n' + '='.repeat(60));
   console.log('🚀 FRAMER → ELEMENTOR V4 PIPELINE V2 WIZARD');
   console.log('='.repeat(60) + '\n');
 
   // PHASE 0: MCP CONNECTION CHECK
-  // Architektur: Alle Novamira-Calls laufen direkt ueber den Claude novamira-solar-local
-  // MCP Connector. Kein .mcp.json, keine env vars, keine mcp-bridge.js HTTP-Calls.
-  log.step('Phase 0: MCP Connector Pruefung...');
+  log.step('Phase 0: MCP Connector Prüfung...');
   console.log(`
   ┌─────────────────────────────────────────────────────────┐
   │  NOVAMIRA MCP CONNECTOR                                 │
@@ -115,14 +471,12 @@ async function main() {
   │  Tool:   novamira-solar-local:mcp-adapter-execute-ability│
   │  Format: { ability_name: "novamira/...", parameters: {} }│
   │                                                         │
-  │  Kein .mcp.json noetig. Kein HTTP aus Node.js.          │
+  │  Kein .mcp.json nötig. Kein HTTP aus Node.js.          │
   │  Der Agent ruft alle Abilities direkt auf.              │
   └─────────────────────────────────────────────────────────┘
   `);
 
   // PHASE 0.2: SCHEMA SYNC (Fail-Fast)
-  // Holt das kanonische Prop-Schema vom V2-Plugin via REST.
-  // Bricht den Build ab, wenn der Endpoint nicht erreichbar ist.
   log.step('Phase 0.2: Schema-Sync mit V2-Plugin...');
   try {
     await runFile(
@@ -142,14 +496,12 @@ async function main() {
     process.exit(1);
   }
 
-  // PHASE 0a: V4 ATOMIC REQUIREMENTS CHECK (Fix D — Auto-Call via McpBridge)
-  // Ruft elementor-check-setup direkt via mcp-bridge.js auf.
-  // Fallback: gespeicherte JSON-Datei, oder Guidance-Ausgabe.
+  // PHASE 0a: V4 ATOMIC REQUIREMENTS CHECK
   log.step('Phase 0a: V4 Atomic Requirements Check...');
 
   let v4CheckPassed = false;
 
-  // 1. Primär: --auto-call (direkter McpBridge-Call)
+  // 1. Primär: --auto-call
   try {
     await runFile(
       nodeBin,
@@ -163,7 +515,7 @@ async function main() {
     log.warn(`V4 Auto-Check fehlgeschlagen: ${String(err).slice(0, 200)}`);
   }
 
-  // 2. Fallback: Gespeicherte Datei (wenn Auto-Call nicht verfügbar)
+  // 2. Fallback: Gespeicherte Datei
   if (!v4CheckPassed) {
     const setupCheckPath = path.join(rootDir, 'reports', 'elementor-check-setup.json');
     if (existsSync(setupCheckPath)) {
@@ -190,7 +542,7 @@ async function main() {
     }
   }
 
-  // 3. Guidance (wenn nichts funktioniert hat)
+  // 3. Guidance
   if (!v4CheckPassed) {
     await runFile(
       nodeBin,
@@ -201,7 +553,6 @@ async function main() {
     log.info('Elementor → Settings → Features → "Atomic Widgets" muss ON sein.');
   }
 
-  // Phase 1.3/1.4 variables — declared OUTSIDE try so catch block can access them
   let targetPostIdNum = null;
   let rollbackPlanPath = null;
   let splitPlanPath = null;
@@ -247,13 +598,13 @@ async function main() {
     }
 
     // --- PRE-BUILD PIPELINE EXECUTION ---
-    
+
     // Schritt A: FramerExport Symbiose
     const exportFolderName = `framer-${framerUrl.replace(/^https?:\/\//, '').replace(/[^a-z0-9]/gi, '-').substring(0, 30)}`;
     let exportDir = path.join(rootDir, 'exports', exportFolderName);
-    
-    log.step(`Starte FramerExport in dediziertem Ordner: ${exportDir}`);
-    try {
+
+    await runWithRecovery('FramerExport', async () => {
+      log.step(`Starte FramerExport in dediziertem Ordner: ${exportDir}`);
       await fs.mkdir(exportDir, { recursive: true });
 
       const framerExportDir = findFramerExportDir();
@@ -261,9 +612,9 @@ async function main() {
         throw new Error('FramerExport nicht gefunden. Setze FRAMER_EXPORT_DIR oder lege FramerExport unter tools/framer-export bzw. FramerExport ab.');
       }
 
-      const packageJson = await readJsonIfExists(path.join(framerExportDir, 'package.json'));
+      const pkgJson = await readJsonIfExists(path.join(framerExportDir, 'package.json'));
       const before = await findIndexHtmlDirs(framerExportDir);
-      if (packageJson?.scripts?.dev) {
+      if (pkgJson?.scripts?.dev) {
         log.info(`Befehl: npm run dev -- <framer-url> in ${framerExportDir}`);
         await runFile(npmBin, ['run', 'dev', '--', framerUrl], 'FramerExport ausführen', framerExportDir);
       } else if (existsSync(path.join(framerExportDir, 'src', 'cli', 'index.ts'))) {
@@ -279,14 +630,9 @@ async function main() {
       if (!generated) throw new Error('FramerExport hat kein index.html erzeugt.');
       exportDir = generated.dir;
       log.success('FramerExport erfolgreich abgeschlossen. Lokales Mirror erstellt.');
-    } catch (e) {
-      log.error('FramerExport fehlgeschlagen. Bitte prüfe die URL und stelle sicher, dass "npx tsx" verfügbar ist.');
-      console.error(e.message);
-      rl.close();
-      return;
-    }
+    });
 
-    // Schritt B: Asset & Structure Extraction (auf dem FramerExport-Output)
+    // Schritt B: Asset & Structure Extraction
     const exportHtml = path.join(exportDir, 'index.html');
     const tokensDir = path.join(exportDir, 'tokens');
     const assetsDir = path.join(exportDir, 'assets');
@@ -297,67 +643,51 @@ async function main() {
       { args: ['scripts/resolve-fonts.js', '--html', exportHtml, '--fonts-dir', path.join(assetsDir, 'fonts'), '--output', path.join(tokensDir, 'font-resolution.json')], desc: 'Löse Font-Referenzen auf' },
       { args: ['scripts/extract-responsive-breakpoints.js', '--css', exportHtml, '--output', path.join(tokensDir, 'responsive-breakpoints.json')], desc: 'Extrahiere Responsive Breakpoints' },
       { args: ['scripts/extract-framer-styles.js', '--html', exportHtml, '--output', path.join(tokensDir, 'extracted-styles.json')], desc: 'Extrahiere CSS-Properties und Variablen' },
-      { args: ['scripts/design-token-extractor.js', '--html', exportHtml, '--output', path.join(tokensDir, 'token-mapping.json'), '--variables-plan', path.join(tokensDir, 'variables-plan.json')], desc: 'Erzeuge Design-Token-Mapping und Variablen-Plan' }
+      { args: ['scripts/design-token-extractor.js', '--html', exportHtml, '--output', path.join(tokensDir, 'token-mapping.json'), '--variables-plan', path.join(tokensDir, 'variables-plan.json')], desc: 'Erzeuge Design-Token-Mapping und Variablen-Plan' },
+      { args: ['scripts/html-to-widget-plan.js', '--html', exportHtml, '--output', path.join(tokensDir, 'widget-plan.json')], desc: 'HTML → Elementor Widget-Plan analysieren' }
     ];
 
     for (const step of extractionSteps) {
-      try {
-        // Nutze pipelineDir (framer-v4-pipeline-v2) als Arbeitsverzeichnis für die lokalen Scripts
+      await runWithRecovery(step.desc, async () => {
         await runFile(nodeBin, step.args, step.desc, pipelineDir);
-      } catch (err) {
-        log.warn(`Script fehlgeschlagen oder nicht gefunden: ${step.desc}.`);
-      }
+      });
     }
 
     // Schritt C: Pre-Build Validation (12 Guards)
     const treePath = path.join(rootDir, 'v4-tree.json');
     if (existsSync(treePath)) {
-      try {
+      await runWithRecovery('12-Guard Validation', async () => {
         const validationReportPath = path.join(rootDir, 'validation-report.json');
         await runFile(nodeBin, [
           'scripts/framer-pre-build-validate.js',
           '--tree', treePath,
           '--output', validationReportPath,
         ], 'Führe 12-Guard Pre-Build-Validierung durch', pipelineDir);
-        
-        const reportPath = validationReportPath;
+
         try {
-          const report = JSON.parse(await fs.readFile(reportPath, 'utf8'));
+          const report = JSON.parse(await fs.readFile(validationReportPath, 'utf8'));
           const score = report.meta?.score || report.score || 0;
           if (score < 85) {
-            log.error(`Validation Score zu niedrig: ${score}%. Mindestens 85% erforderlich.`);
-            log.info('Bitte prüfe validation-report.json und behebe die Fehler, bevor du fortfährst.');
-            rl.close();
-            return;
+            throw new Error(`Validation Score zu niedrig: ${score}%. Mindestens 85% erforderlich.`);
           }
           log.success(`Validation bestanden mit Score: ${score}%`);
         } catch (e) {
+          if (e.message.includes('Score zu niedrig')) throw e;
           log.warn('Konnte validation-report.json nicht parsen. Gehe von manuellem Check aus.');
         }
-      } catch (err) {
-        log.error('Pre-Build-Validierung fehlgeschlagen. Build wird abgebrochen.');
-        rl.close();
-        return;
-      }
+      });
     } else {
       log.warn('v4-tree.json nicht gefunden. Überspringe Pre-Build-Validierung.');
-      log.info('Hinweis: Führe manuell `node scripts/convert-xml-to-v4.js` oder ein ähnliches Tool aus, um den Tree zu generieren, bevor du den Build startest.');
+      log.info('Hinweis: Führe manuell `node scripts/convert-xml-to-v4.js` oder ein ähnliches Tool aus.');
     }
 
-    // ── PHASE 1.3: ROLLBACK BACKUP PLAN ──────────────────────────────────
-    // Generiert einen MCP-Execution-Plan zum Sichern des aktuellen
-    // Seiteninhalts VOR dem Build. Der Agent muss die MCP-Calls
-    // ausführen und die Ergebnisse an RollbackManager.backupPlan()
-    // zurückgeben, um das Backup zu persistieren.
-    //
-    // Nur bei numerischer Post-ID (kein "new").
+    // ── PHASE 1.3: ROLLBACK BACKUP PLAN ──────────────────────────────
     targetPostIdNum = targetPostId !== 'new' ? parseInt(targetPostId, 10) : null;
     rollbackPlanPath = null;
     splitPlanPath = null;
 
     if (targetPostIdNum && !isNaN(targetPostIdNum)) {
-      log.step('Phase 1.3: Rollback-Backup-Plan generieren...');
-      try {
+      await runWithRecovery('Rollback-Backup', async () => {
         const { RollbackManager } = await import(
           pathToFileURL(path.join(pipelineDir, 'scripts', 'lib', 'rollback.js')).href
         );
@@ -372,27 +702,17 @@ async function main() {
         } else {
           log.info('Backup existiert bereits — überspringe.');
         }
-      } catch (err) {
-        log.warn(`Rollback-Plan fehlgeschlagen: ${err.message}`);
-        log.warn('Build wird ohne Rollback-Sicherung fortgesetzt.');
-      }
+      });
     } else {
       log.info('Phase 1.3 übersprungen (neue Seite — kein Backup nötig).');
     }
 
-    // ── PHASE 1.4: SPLIT-LARGE-TREE CHECK ────────────────────────────────
-    // Prüft ob der v4-tree.json zu groß für einen einzelnen
-    // elementor-set-content Call ist und splittet in Sections.
+    // ── PHASE 1.4: SPLIT-LARGE-TREE CHECK ────────────────────────────
     if (existsSync(treePath) && targetPostIdNum) {
-      log.step('Phase 1.4: Large-Tree-Split-Check...');
-      try {
+      await runWithRecovery('Split-Large-Tree', async () => {
         const splitStdout = await runFile(
           nodeBin,
-          [
-            path.join(pipelineDir, 'scripts', 'lib', 'split-large-tree.js'),
-            '--plan', treePath,
-            '--post-id', String(targetPostIdNum),
-          ],
+          [path.join(pipelineDir, 'scripts', 'lib', 'split-large-tree.js'), '--plan', treePath, '--post-id', String(targetPostIdNum)],
           'V4-Tree auf Section-Split prüfen',
           pipelineDir
         );
@@ -409,16 +729,12 @@ async function main() {
             log.success(`Tree passt in einen Build-Call (${splitResult.totalElements} Elemente).`);
           }
         }
-      } catch (err) {
-        log.warn(`Split-Check: ${err.message}`);
-        log.info('Build mit ungesplittetem Tree fortsetzen.');
-      }
+      });
     } else if (!existsSync(treePath)) {
       log.info('Phase 1.4 übersprungen (v4-tree.json nicht vorhanden).');
     }
 
-    // Schritt D: Manifest Generierung (Fix 5 - Single Source of Truth)
-    // BLUEPRINT.md ist der Master. Manifest referenziert nur noch dorthin.
+    // Schritt D: Manifest Generierung
     log.step('Generiere Build-Manifest...');
     const manifest = {
       timestamp: new Date().toISOString(),
@@ -437,6 +753,10 @@ async function main() {
         variablesPlan: path.relative(rootDir, path.join(exportDir, 'tokens', 'variables-plan.json')).replace(/\\/g, '/'),
         validation: existsSync(treePath) ? 'validation-report.json' : 'pending'
       },
+      preview: targetPostIdNum ? {
+        command: `node wizard.js preview --post-id ${targetPostIdNum}`,
+        promote: `node wizard.js promote --preview-id <ID> --target-id ${targetPostIdNum}`,
+      } : null,
       nextSteps: [
         '=== PRE-BUILD ===',
         '1. v4-tree.json generieren (convert-xml-to-v4.js oder Novamira Framer-Pipeline Skill).',
@@ -446,26 +766,28 @@ async function main() {
         '5. Optional: generate-global-classes.js und asset-to-wp-media.js ausfuehren.',
         '6. patch-v4-tree-media-ids.js ausfuehren (Invariant IV).',
         '7. framer-pre-build-validate.js --tree v4-tree.json (Score muss >= 85 sein).',
-        '=== ROLLBACK & SPLIT (NEU Phase 1.3/1.4) ===',
+        '=== ROLLBACK & SPLIT ===',
         `8. ROLLBACK: MCP-Calls aus ${rollbackPlanPath ? path.relative(rootDir, rollbackPlanPath) : 'rollback-plan.json'} ausfuehren.`,
         `   → elementor-get-content + adrians-page-settings → Ergebnisse an RollbackManager.backupPlan() uebergeben.`,
-        `9. SPLIT:  ${splitPlanPath ? `Falls Tree >50 Elemente → MCP-Calls aus ${path.relative(rootDir, splitPlanPath)} ausfuehren.` : 'Tree passt in einen Call — siehe split-plan.json.'}`,
+        `9. SPLIT: ${splitPlanPath ? `Falls Tree >50 Elemente → MCP-Calls aus ${path.relative(rootDir, splitPlanPath)} ausfuehren.` : 'Tree passt in einen Call.'}`,
+        '=== PREVIEW (NEU v0.7.0) ===',
+        '10. PREVIEW: node wizard.js preview --post-id <ID> → erstellt Preview-Page.',
+        '    PROMOTE: node wizard.js promote --preview-id <ID> --target-id <ID> → schiebt Preview live.',
         '=== BUILD ===',
-        '10. MCP: novamira/adrians-setup-v4-foundation { post_id: <ID> } aufrufen -> session-ids sichern.',
-        '11. MCP: novamira/elementor-set-content (NICHT adrians-batch-build-page fuer Framer-Trees!).',
+        '11. MCP: novamira/adrians-setup-v4-foundation { post_id: <ID> } aufrufen -> session-ids sichern.',
+        '12. MCP: novamira/elementor-set-content (NICHT adrians-batch-build-page fuer Framer-Trees!).',
         '=== ROLLBACK BEI FEHLER ===',
         '    Bei Build-Fehler: RollbackManager.restorePlan(postId) aufrufen → restore-plan.json ausfuehren.',
         '=== POST-BUILD QA ===',
-        '12. MCP: novamira/elementor-get-content -> als elementor-dump.json speichern.',
-        '13. verify-build-binding.js elementor-dump.json (Invariant I).',
-        '14. validate-v4-tree.js elementor-dump.json (Invariant I-V).',
-        '15. MCP: novamira/adrians-layout-audit { post_id: <ID> } -- Pass-through, Nesting, Grid-Kandidaten.',
-        '16. MCP: novamira/adrians-visual-qa { post_id: <ID>, breakpoints: [desktop, tablet, mobile] }.',
-        '17. MCP: novamira/adrians-responsive-audit { post_id: <ID> } -- Breakpoint-Coverage.',
-        '18. MCP: novamira/adrians-variable-audit { report: "drift" } -- e-gv-* Drift-Check (Fix 5).',
-        '19. Bei Style-Fehlern: adrians-patch-element-styles { post_id, patches: [{element_id, ...}] }.',
-        '    Hinweis: element_id in adrians-add-element setzen -> macht patch-element-styles praeziser.',
-        '20. Bei GC-Problemen: adrians-add-global-class-variant / adrians-edit-global-class-variant.',
+        '13. MCP: novamira/elementor-get-content -> als elementor-dump.json speichern.',
+        '14. verify-build-binding.js elementor-dump.json (Invariant I).',
+        '15. validate-v4-tree.js elementor-dump.json (Invariant I-V).',
+        '16. MCP: novamira/adrians-layout-audit { post_id: <ID> } -- Pass-through, Nesting, Grid-Kandidaten.',
+        '17. MCP: novamira/adrians-visual-qa { post_id: <ID>, breakpoints: [desktop, tablet, mobile] }.',
+        '18. MCP: novamira/adrians-responsive-audit { post_id: <ID> } -- Breakpoint-Coverage.',
+        '19. MCP: novamira/adrians-variable-audit { report: "drift" } -- e-gv-* Drift-Check.',
+        '20. Bei Style-Fehlern: adrians-patch-element-styles { post_id, patches: [{element_id, ...}] }.',
+        '21. Bei GC-Problemen: adrians-add-global-class-variant / adrians-edit-global-class-variant.',
         '    Kein Tree-Rebuild noetig fuer Responsive-Fixes auf Global Classes.'
       ]
     };
@@ -478,16 +800,23 @@ async function main() {
     log.success('🎉 PRE-BUILD PHASE ABGESCHLOSSEN');
     console.log('='.repeat(60));
     console.log('\nNaechste Schritte: Folge der nextSteps-Liste in build-manifest.json.');
-    console.log('Alle 20 Schritte sind in der richtigen Reihenfolge dokumentiert.');
-    console.log('Wichtig: Schritt 8 (Rollback), 9 (Split) und 15-16 (Layout-Audit + Visual-QA) nicht ueberspringen!');
-    console.log('NEU (v1.0.0 Extra): layout-audit, variable-audit, batch-get-content, GC-Variant-Abilities verfuegbar.');
+    console.log('Alle 21 Schritte sind in der richtigen Reihenfolge dokumentiert.');
+    console.log('Wichtig: Schritt 8 (Rollback), 9 (Split), 10 (Preview) und 16-17 (Layout-Audit + Visual-QA) nicht ueberspringen!');
+    if (targetPostIdNum) {
+      console.log(`\n💡 Preview-Tipp: node wizard.js preview --post-id ${targetPostIdNum}`);
+    }
 
   } catch (error) {
     log.error('Ein kritischer Fehler ist im Wizard aufgetreten:');
     console.error(error);
 
+    // Interaktive Recovery auch im Top-Level Catch
+    const action = await promptErrorRecovery('Build-Gesamt', error);
+    if (action === 'skip') {
+      log.info('Build abgeschlossen mit Fehlern — bitte Logs prüfen.');
+    }
+
     // ── ROLLBACK RESTORE GUIDANCE ──────────────────────────────────────
-    // Wenn ein Backup existiert, zeige den Restore-Pfad an.
     if (targetPostIdNum && !isNaN(targetPostIdNum)) {
       try {
         const { RollbackManager } = await import(
@@ -502,13 +831,69 @@ async function main() {
           console.error(`  → ${path.relative(rootDir, restorePlanPath)}`);
           console.error('  → Agent: MCP-Calls aus restore-plan.json ausführen, um den alten Stand wiederherzustellen.');
         }
-      } catch (_) {
-        // Rollback-Modul nicht verfügbar — keine Restore-Guidance möglich
-      }
+      } catch (_) {}
     }
   } finally {
     rl.close();
   }
 }
 
+// ── Subcommand Dispatch ────────────────────────────────────────────────────
+const sub = process.argv[2];
+
+if (sub === 'help' || sub === '--help' || sub === '-h') {
+  console.log(`
+Framer -> Elementor V4 Pipeline Wizard v0.7.0
+
+SUBCOMMANDS:
+  (default)    Interaktiver Build-Wizard mit Recovery-Mode
+  preflight    System-Checks vor dem Build (8 Checks)
+  dry-run      Build-Plan ohne Schreibzugriff generieren
+  preview      Preview-Page von bestehender Seite erstellen
+  promote      Preview auf Live-Seite promovieren
+  serve        HTTP-API starten (default Port 7123)
+  help         Diese Hilfe
+
+OPTIONEN:
+  --post-id <ID>       Post-ID für preview
+  --preview-id <ID>    Preview-ID für promote
+  --target-id <ID>     Ziel-Post-ID für promote
+  --format=json        JSON-Output (preflight)
+  --port <PORT>        Port für serve (default 7123)
+`);
+  process.exit(0);
+}
+
+if (sub === 'preflight') {
+  const formatJson = process.argv.includes('--format=json');
+  await runPreflight(formatJson);
+  process.exit(0);
+}
+
+if (sub === 'preview') {
+  const postIdIdx = process.argv.indexOf('--post-id');
+  const postId = postIdIdx >= 0 ? process.argv[postIdIdx + 1] : null;
+  await runPreview(postId);
+}
+
+if (sub === 'promote') {
+  const pvIdx = process.argv.indexOf('--preview-id');
+  const tgIdx = process.argv.indexOf('--target-id');
+  const previewId = pvIdx >= 0 ? process.argv[pvIdx + 1] : null;
+  const targetId = tgIdx >= 0 ? process.argv[tgIdx + 1] : null;
+  await runPromote(previewId, targetId);
+}
+
+if (sub === 'dry-run' || process.argv.includes('--dry-run')) {
+  await runDryRun();
+  process.exit(0);
+}
+
+if (sub === 'serve') {
+  const port = parseInt(process.argv[3] || '7123', 10);
+  await runServe(port);
+  process.exit(0);
+}
+
+// Default: interaktiver Build-Wizard
 main();

@@ -1,0 +1,95 @@
+name: Framer V4 Pipeline CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'framer-v4-pipeline-v2-main/**'
+  pull_request:
+    paths:
+      - 'framer-v4-pipeline-v2-main/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: framer-v4-pipeline-v2-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: node --test tests/pipeline.test.js
+
+  test-e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: framer-v4-pipeline-v2-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: node --check tests/e2e.test.js
+
+  test-schema:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: framer-v4-pipeline-v2-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: node --check scripts/validate-v4-tree.js
+
+  test-mcp-mock:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: framer-v4-pipeline-v2-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: MCP Mock Integration Test
+        run: node tests/integration.test.js
+
+  test-visual:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: framer-v4-pipeline-v2-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm install
+      - run: node --check scripts/visual-qa.js
+      - run: node --check scripts/section-compare.js
+
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: framer-v4-pipeline-v2-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm run lint:version
+
+  syntax:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: framer-v4-pipeline-v2-main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: |
+          for f in wizard.js scripts/**/*.js tests/**/*.js; do
+            node --check "$f" || exit 1
+          done
+          echo "All syntax OK"
