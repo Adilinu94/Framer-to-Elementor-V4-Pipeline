@@ -22,7 +22,7 @@
     "e-heading": { "required": ["title"] },
     "e-paragraph": { "required": ["paragraph"] },
     "e-button": { "required": ["text"] },
-    "e-image": { "required": ["image-src"] },
+    "e-image": { "required": ["image"] },
     "e-svg": { "required": ["svg-icon"] },
     "e-divider": { "required": [] },
     "e-flexbox": { "required": [] },

@@ -124,9 +124,14 @@ export function wrapType(type, value) {
   return { '$$type': type, value };
 }
 
+/** Returns true for numeric CSS values (1200px, 50%, 2fr) — false for keywords (fit-content, auto, max-content). Use before calling wrapSize() to avoid producing $$type:"string" for dimension properties, which Elementor's Style_Parser rejects. */
+export function isDimensionValue(val) {
+  return /^-?[\d.]+(px|%|em|rem|vw|vh)?$/.test(String(val).trim());
+}
+
 /** "68px" → { $$type:"size", value:{ size:68, unit:"px" } } */
 export function wrapSize(valStr) {
-  const m = String(valStr).match(/^(-?[\d.]+)(px|%|em|rem|vw|vh|fr)?$/);
+  const m = String(valStr).match(/^(-?[\d.]+)(px|%|em|rem|vw|vh)?$/);
   if (m) return { '$$type': 'size', value: { size: parseFloat(m[1]), unit: m[2] || 'px' } };
   return { '$$type': 'string', value: String(valStr) };
 }
@@ -186,8 +191,19 @@ export function wrapGvFont(gvId)  { return { '$$type': 'global-font-variable',  
 export function wrapImageSrc({ id = null, url = null } = {}) {
   const value = {};
   if (id !== null && id !== undefined) value.id = id;
-  if (url !== null && url !== undefined) value.url = typeof url === 'object' ? url : wrapType('string', String(url));
+  if (url !== null && url !== undefined) value.url = typeof url === 'object' ? url : wrapType('url', String(url));
   return { '$$type': 'image-src', value };
+}
+
+/** Wraps an image-src into the full V4 image prop shape: {$$type:"image", value:{src:{$$type:"image-src", value:{id/url}}, size:{$$type:"string", value:"full"}}} */
+export function wrapImage(srcValue) {
+  return {
+    '$$type': 'image',
+    value: {
+      src: srcValue,
+      size: { '$$type': 'string', value: 'full' },
+    },
+  };
 }
 
 /** Wraps a CSS value intelligently: px/%/em → size, otherwise string */

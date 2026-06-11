@@ -55,6 +55,172 @@ npm run export-mcp-plan   # export-mcp-xml.js → getNodeXml-Plan
 npm run visual-qa         # visual-qa.js → Browser-Screenshots (Playwright/Puppeteer/dry-run)
 ```
 
+## E2E Pipeline (Automatisiert) 🚀
+
+Der komplette Durchlauf vom Framer-Design bis zur live WordPress-Seite in **3 Schritten** — ohne manuelle Zwischenschritte. Der `--validate`-Flag führt nach jeder Konvertierung automatisch den Validator aus, sodass Formatfehler client-seitig erkannt werden, bevor sie den Server erreichen.
+
+### Flow-Diagramm
+
+```
+Unframer MCP          convert-xml-to-v4.js         Novamira MCP
+     │                      │                           │
+     ├─ getNodeXml() ──────▶│                           │
+     │                      ├─ XML → V4 Tree           │
+     │                      ├─ validate-v4-tree.js     │
+     │                      │  (6 Checks, Score ≥85%)  │
+     │                      │                           │
+     │                      └─ v4-tree.json ──────────▶│
+     │                                                  ├─ create-post
+     │                                                  ├─ elementor-set-content
+     │                                                  └─ ✅ Live Page
+```
+
+### Schritt 1: XML vom Unframer MCP holen
+
+```bash
+NODE_TLS_REJECT_UNAUTHORIZED=0 node --input-type=module -e "
+const url = 'https://mcp.unframer.co/mcp?id=<PROJECT_ID>&secret=<SECRET>';
+const h = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' };
+
+// Init
+const initR = await fetch(url, { method: 'POST', headers: h,
+  body: JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',
+    params:{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'pipeline',version:'0.7.0'}}}) });
+
+// Get XML
+const xmlR = await fetch(url, { method: 'POST', headers: h,
+  body: JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/call',
+    params:{name:'getNodeXml',arguments:{projectName:'<PROJECT>'}}}) });
+const xmlJ = await xmlR.json();
+const xml = xmlJ.result.content[0].text;
+
+// Save
+import { writeFileSync } from 'fs';
+writeFileSync('tools/framer-export/homepage.xml', xml);
+console.log('XML saved: ' + xml.length + ' chars');
+"
+```
+
+### Schritt 2: Konvertieren + Validieren
+
+```bash
+node scripts/convert-xml-to-v4.js \
+  --xml      tools/framer-export/homepage.xml \
+  --output   v4-tree.json \
+  --validate
+```
+
+**Ausgabe:**
+```
+✅ Score: 100% | 0 errors, 36 warnings
+✓ 38 V4 nodes converted, 0 warnings
+```
+
+**Validierte Checks (6 Stück, je ~16.7%):**
+
+| Check | Name | Beschreibung |
+|-------|------|-------------|
+| 1 | `$$TYPE-CORRECTNESS` | `$$type`-Envelope valide + keine visuellen Props in `settings` (Invariant II) |
+| 2 | `STYLES-CLASSES-BINDING` | Jede lokale Style-ID in `settings.classes.value` (Invariant I) + keine orphaned Class-Referenzen |
+| 3 | `STYLE-ID-HYPHEN` | Style-IDs ohne Bindestriche (`gc-*` Prefix explizit erlaubt) |
+| 4 | `RESPONSIVE-COVERAGE` | Große font-size/width/padding Werte ohne mobile Variante → Warning |
+| 5 | `WIDGET-SETTINGS` | Widget-Typ hat alle required Settings (z.B. `title` für e-heading) |
+| 6 | `VERBOSE-STYLE-FORMAT` | Style-Einträge mit `id`, `type:"class"`, `label`, `meta.breakpoint`, `meta.state`, `custom_css` — kein ERGONOMIC-Leak |
+
+Score-Schwelle: **≥ 85%** (ein Fehler in einem Check genügt zum Blocken).
+
+### Vorbereitung: MCP-Bridge konfigurieren
+
+Die Bridge verbindet das lokale Script mit dem Novamira MCP-Server auf der WordPress-Instanz. Konfiguration erfolgt via `mcp-server-config.json` (siehe `mcp-server-config.example.json`).
+
+```json
+{
+  "endpoint": "https://solar.local/wp-json/novamira/v1/mcp",
+  "credentials": { "username": "...", "password": "..." }
+}
+```
+
+### Schritt 3: In WordPress bauen
+
+```bash
+NODE_TLS_REJECT_UNAUTHORIZED=0 node --input-type=module -e "
+import { readFileSync } from 'fs';
+const McpBridge = (await import('./scripts/lib/mcp-bridge.js')).McpBridge;
+const mcp = await McpBridge.fromConfig();
+
+// Tree laden (als Array wrappen — elementor-set-content erwartet Array!)
+const content = JSON.parse(readFileSync('v4-tree.json', 'utf8'));
+const wrapped = Array.isArray(content) ? content : [content];
+
+// Seite erstellen
+const created = await mcp.call('novamira/create-post', {
+  title: 'Meine Framer-Seite',
+  status: 'publish',
+  post_type: 'page',
+});
+const postId = created?.data?.post_id || created?.post_id || created?.id;
+
+// V4 Content setzen
+const result = await mcp.call('novamira/elementor-set-content', {
+  post_id: postId,
+  content: wrapped,
+});
+
+if (result.success) {
+  console.log('✅ Build erfolgreich!');
+  console.log('Preview: https://solar.local/?p=' + postId + '&preview=true');
+}
+"
+```
+
+### Tree-Format (VERBOSE)
+
+Der Converter produziert das VERBOSE Style-Format, das der Server ohne manuelle Transformation akzeptiert:
+
+```json
+{
+  "elType": "e-flexbox",
+  "widgetType": "e-flexbox",
+  "id": "a1b2c3d",
+  "settings": {
+    "classes": { "$$type": "classes", "value": ["shero"] },
+    "tag": "section"
+  },
+  "styles": {
+    "shero": {
+      "id": "shero",
+      "type": "class",
+      "label": "local",
+      "variants": [{
+        "meta": { "breakpoint": "desktop", "state": null },
+        "props": {
+          "width": { "$$type": "size", "value": { "size": 1200, "unit": "px" } }
+        },
+        "custom_css": null
+      }]
+    }
+  },
+  "elements": [ ... ]
+}
+```
+
+**Kritische Format-Details:**
+- `elType` ist Pflicht — `e-flexbox`/`e-div-block` für Container, `"widget"` für Widgets
+- `elements` (nicht `children`) für Kind-Elemente
+- `fr`-Units sind **nicht** erlaubt — der Converter filtert sie via `isDimensionValue()`
+- `meta.state` muss als Key **existieren** (`null` ist OK, fehlender Key nicht)
+
+### One-Liner (kompletter Durchlauf)
+
+```bash
+node scripts/convert-xml-to-v4.js \
+  --xml tools/framer-export/homepage.xml \
+  --output v4-tree.json --validate \
+  && echo 'Ready for elementor-set-content'
+```
+
+---
+
 ## Workflow (vollständig)
 
 ```bash

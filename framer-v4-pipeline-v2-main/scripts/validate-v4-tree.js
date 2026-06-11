@@ -3,7 +3,7 @@
  * validate-v4-tree.js
  *
  * Pre-build client validator for Elementor V4 Atomic Widget trees.
- * Runs 5 checks against a V4 element tree JSON file before sending
+ * Runs 6 checks against a V4 element tree JSON file before sending
  * to elementor-set-content.
  *
  * Usage:
@@ -13,12 +13,13 @@
  *
  * Exit code: 0 = pass, 1 = blocked (score < 85)
  *
- * The 5 checks (in order of error yield):
+ * The 6 checks (in order of error yield):
  *   1. $$type correctness — Plain values where $$type wrapper required
  *   2. Styles-classes binding — Local style IDs not in settings.classes
  *   3. Hyphen in style IDs       — Invalid style names that break the parser
  *   4. Responsive coverage       — Large values without mobile variant
  *   5. Widget/settings congruence — Wrong required key for widgetType
+ *   6. Verbose style format      — Style entries missing id/type/label, null breakpoint, or plain-string custom_css
  */
 
 import fs from 'fs';
@@ -43,7 +44,7 @@ if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
   console.log('  --mode      strict (default, exit 1 if score < 85%) or warn (always exit 0)');
   console.log('  --schema    Path to prop-type-schema JSON (default: .commandcode/schemas/v4-prop-type-schema.json)');
   console.log('');
-  console.log('Runs 5 checks against a V4 element tree before sending to elementor-set-content.');
+  console.log('Runs 6 checks against a V4 element tree before sending to elementor-set-content.');
   process.exit(0);
 }
 
@@ -475,6 +476,86 @@ function checkWidgetSettings(el, path, errors) {
   }
 }
 
+// ─── CHECK 6: Verbose style format ──────────────────────────────────
+
+/**
+ * Validates that every per-element style entry (non-gc- prefix) uses the
+ * VERBOSE format required by elementor-set-content:
+ *   {id: "<styleId>", type: "class", label: "local", variants: [...]}
+ *
+ * Catches three classes of bug seen in production:
+ *   a) ERGONOMIC format leakage — `$$type` at style level instead of `type: "class"`
+ *   b) Missing id/type/label — server rejects the whole subtree
+ *   c) Plain-string custom_css — crashes Elementor renderer
+ */
+function checkVerboseStyleFormat(el, path, errors) {
+  if (!el.styles || typeof el.styles !== 'object') return;
+
+  for (const [styleId, styleDef] of Object.entries(el.styles)) {
+    if (styleId.startsWith('gc-')) continue; // Global classes are server-validated
+    if (!styleDef || typeof styleDef !== 'object') continue;
+
+    const missing = [];
+
+    // (a) ERGONOMIC format detection: $$type at top level = old format
+    if (styleDef['$$type'] !== undefined) {
+      missing.push(`has $$type:"${styleDef['$$type']}" at style level — old ERGONOMIC format. Replace with type:"class".`);
+    }
+
+    // (b) Required VERBOSE fields
+    if (!styleDef.id) missing.push('missing "id" field');
+    else if (styleDef.id !== styleId) missing.push(`id "${styleDef.id}" does not match style key "${styleId}"`);
+
+    if (!styleDef.type) missing.push('missing "type" field (should be "class")');
+    else if (styleDef.type !== 'class') missing.push(`type is "${styleDef.type}" but must be "class" for per-element styles`);
+
+    if (styleDef.label === undefined) missing.push('missing "label" field (should be "local")');
+
+    // Variant-level checks
+    const variants = styleDef.variants;
+    if (!Array.isArray(variants)) {
+      missing.push('variants is not an array');
+    } else {
+      for (let vi = 0; vi < variants.length; vi++) {
+        const v = variants[vi];
+        if (!v || typeof v !== 'object') continue;
+        const vpath = `variants[${vi}]`;
+
+        // meta.breakpoint must not be null (server rejects)
+        if (!v.meta || v.meta.breakpoint === null || v.meta.breakpoint === undefined) {
+          missing.push(`${vpath}.meta.breakpoint is ${v.meta?.breakpoint ?? 'undefined'} — must be "desktop" or a named breakpoint`);
+        }
+
+        // meta.state must be present (PHP auto-fills, but missing it is a format gap)
+        if (v.meta && !('state' in v.meta)) {
+          missing.push(`${vpath}.meta.state is missing — set to null`);
+        }
+
+        // (c) custom_css must be null or {raw: "<base64>"}, never a plain string
+        if (typeof v.custom_css === 'string') {
+          missing.push(`${vpath}.custom_css is a plain string — will crash Elementor renderer. Must be null or {raw: base64_string}.`);
+        }
+        if (v.custom_css === undefined) {
+          missing.push(`${vpath} missing "custom_css" field (set to null)`);
+        }
+      }
+    }
+
+    if (missing.length > 0) {
+      errors.push({
+        check: 6,
+        rule: 'VERBOSE-STYLE-FORMAT',
+        elementId: getElementId(el),
+        path,
+        styleId,
+        message: `Style "${styleId}" has ${missing.length} format issue(s): ${missing.join('; ')}`,
+        issues: missing,
+        fix: 'Use VERBOSE format: {id: "<styleId>", type: "class", label: "local", variants: [{meta: {breakpoint: "desktop", state: null}, props: {...}, custom_css: null}]}'
+      });
+    }
+  }
+}
+
 // ─── Check: Hardcoded hex (collected as warnings) ───────────────────
 
 function checkHardcodedHex(el, path, warnings) {
@@ -522,11 +603,12 @@ function validate() {
     checkStyleIdHyphen(el, path, errors);
     checkResponsiveCoverage(el, path, warnings);
     checkWidgetSettings(el, path, errors);
+    checkVerboseStyleFormat(el, path, errors);
     checkHardcodedHex(el, path, warnings);
   });
 
-  // Scoring: 5 vital checks, each worth 20%
-  // Checks 1-5 are "vital", hardcoded-hex and responsive are "placebo" (warnings only)
+  // Scoring: 6 vital checks, each worth ~16.7%
+  // Checks 1-6 are "vital", responsive-coverage and hardcoded-hex are warnings only
   const checkErrorCounts = {};
   const checkWarnCounts = {};
   for (const e of errors) {
@@ -538,10 +620,9 @@ function validate() {
     checkWarnCounts[ck] = (checkWarnCounts[ck] || 0) + 1;
   }
 
-  // Score: each of the 5 vital checks passes if it has 0 errors
-  // But check 2 (binding) is weighted double because it's the #1 bug
-  const vitalPassed = [1, 2, 3, 4, 5].filter(ck => !checkErrorCounts[`C${ck}`]).length;
-  const score = Math.round((vitalPassed / 5) * 100);
+  // Score: each of the 6 vital checks passes if it has 0 errors
+  const vitalPassed = [1, 2, 3, 4, 5, 6].filter(ck => !checkErrorCounts[`C${ck}`]).length;
+  const score = Math.round((vitalPassed / 6) * 100);
   const passed = score >= PASS_THRESHOLD;
   const blocked = mode === 'strict' && !passed;
 
@@ -559,7 +640,7 @@ function validate() {
     schemaPath,
     summary: passed
       ? `PASSED: Score ${score}% >= ${PASS_THRESHOLD}%. ${totalErrors} errors, ${totalWarnings} warnings.`
-      : `BLOCKED: Score ${score}% < ${PASS_THRESHOLD}%. ${totalErrors} errors, ${totalWarnings} warnings across 5 checks.`,
+      : `BLOCKED: Score ${score}% < ${PASS_THRESHOLD}%. ${totalErrors} errors, ${totalWarnings} warnings across 6 checks.`,
     stats: {
       totalElements: countElements(tree),
       totalErrors,
@@ -573,11 +654,12 @@ function validate() {
 
   // Add check summaries
   const checkNames = {
-    C1: { name: '$$TYPE-CORRECTNESS', vital: true, weight: 20 },
-    C2: { name: 'STYLES-CLASSES-BINDING', vital: true, weight: 20 },
-    C3: { name: 'STYLE-ID-HYPHEN', vital: true, weight: 20 },
-    C4: { name: 'RESPONSIVE-COVERAGE', vital: true, weight: 20 },
-    C5: { name: 'WIDGET-SETTINGS', vital: true, weight: 20 },
+    C1: { name: '$$TYPE-CORRECTNESS', vital: true, weight: 17 },
+    C2: { name: 'STYLES-CLASSES-BINDING', vital: true, weight: 17 },
+    C3: { name: 'STYLE-ID-HYPHEN', vital: true, weight: 17 },
+    C4: { name: 'RESPONSIVE-COVERAGE', vital: true, weight: 16 },
+    C5: { name: 'WIDGET-SETTINGS', vital: true, weight: 17 },
+    C6: { name: 'VERBOSE-STYLE-FORMAT', vital: true, weight: 16 },
     placebo: { name: 'HARDCODED-HEX', vital: false, weight: 0 }
   };
 

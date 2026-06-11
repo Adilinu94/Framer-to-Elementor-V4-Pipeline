@@ -579,7 +579,7 @@ describe('convert-xml-to-v4: cross-project robustness', () => {
     const outFile = tmpFile('ct1-v4.json');
     run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
     const tree = readJson(outFile);
-    const heading = tree.children[0];
+    const heading = tree.elements[0];
     assert.equal(heading.widgetType, 'e-heading', 'Should be e-heading');
     const content = heading.settings?.title?.value?.content?.value;
     assert.equal(content, 'Real text content', `Text content should be "Real text content", got "${content}"`);
@@ -592,8 +592,8 @@ describe('convert-xml-to-v4: cross-project robustness', () => {
     run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
     const tree = readJson(outFile);
     // Root has one direct child — the heading, not a wrapper
-    assert.equal(tree.children.length, 1, 'Root should have exactly 1 child after flattening');
-    assert.equal(tree.children[0].widgetType, 'e-heading', 'Direct child should be e-heading, not e-flexbox wrapper');
+    assert.equal(tree.elements.length, 1, 'Root should have exactly 1 child after flattening');
+    assert.equal(tree.elements[0].widgetType, 'e-heading', 'Direct child should be e-heading, not e-flexbox wrapper');
   });
 
   test('two-child container: is NOT flattened (has layout props or multiple children)', () => {
@@ -603,7 +603,7 @@ describe('convert-xml-to-v4: cross-project robustness', () => {
     run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
     const tree = readJson(outFile);
     assert.equal(tree.widgetType, 'e-flexbox', 'Multi-child container should remain e-flexbox');
-    assert.equal(tree.children.length, 2, 'Multi-child container should have 2 children');
+    assert.equal(tree.elements.length, 2, 'Multi-child container should have 2 children');
   });
 
   test('SVG root: e-svg with svg-icon markup, no V4 children', () => {
@@ -612,7 +612,7 @@ describe('convert-xml-to-v4: cross-project robustness', () => {
     const outFile = tmpFile('svg1-v4.json');
     run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
     const tree = readJson(outFile);
-    const svgNode = tree.children[0];
+    const svgNode = tree.elements[0];
     assert.equal(svgNode.widgetType, 'e-svg', 'SVG node should map to e-svg');
     assert.ok(svgNode.settings?.['svg-icon']?.value?.includes('<svg'), 'svg-icon should contain SVG markup');
     assert.ok(!svgNode.children || svgNode.children.length === 0, 'e-svg should have no V4 children');
@@ -624,7 +624,7 @@ describe('convert-xml-to-v4: cross-project robustness', () => {
     const outFile = tmpFile('dup1-v4.json');
     run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
     const tree = readJson(outFile);
-    const ids = tree.children.map(c => c.id);
+    const ids = tree.elements.map(c => c.id);
     const unique = new Set(ids);
     assert.equal(unique.size, ids.length, `All widget IDs must be unique, got: ${ids.join(', ')}`);
   });
@@ -635,7 +635,7 @@ describe('convert-xml-to-v4: cross-project robustness', () => {
     const outFile = tmpFile('dsid1-v4.json');
     run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
     const tree = readJson(outFile);
-    const styleKeys = tree.children.flatMap(c => Object.keys(c.styles || {}));
+    const styleKeys = tree.elements.flatMap(c => Object.keys(c.styles || {}));
     const unique = new Set(styleKeys);
     assert.equal(unique.size, styleKeys.length, `All style IDs must be unique, got: ${styleKeys.join(', ')}`);
   });
@@ -668,7 +668,7 @@ describe('convert-xml-to-v4: cross-project robustness', () => {
     run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
     const tree = readJson(outFile);
     assert.equal(tree.widgetType, 'e-flexbox', 'Empty frame should be e-flexbox');
-    assert.ok(!tree.children || tree.children.length === 0, 'Empty frame should have no children');
+    assert.ok(!tree.elements || tree.elements.length === 0, 'Empty frame should have no children');
   });
 
   // Regression: EMCP Bug-Fix #56 — e-paragraph prop heisst 'paragraph', nicht 'editor' oder 'text'

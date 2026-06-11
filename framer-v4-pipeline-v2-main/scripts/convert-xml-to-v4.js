@@ -13,12 +13,18 @@
  */
 
 import fs   from 'node:fs';
+import os   from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { spawnSync } from 'node:child_process';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 import {
   normalizeHex, resolveCssVar, generateStyleId,
   wrapSize, wrapUnitless, wrapDimensions, wrapBorderRadius, wrapGvColor, wrapGvFont,
-  wrapColor, wrapType, wrapImageSrc,
+  wrapColor, wrapType, wrapImageSrc, isDimensionValue, wrapImage,
 } from './lib/framer-utils.js';
 
 // ─────────────────────────────────────────────
@@ -33,6 +39,7 @@ const { values: args } = parseArgs({
     fonts:        { type: 'string' },
     'image-map':  { type: 'string' },
     output:       { type: 'string' },
+    validate:     { type: 'boolean', default: false },
     verbose:      { type: 'boolean', default: false },
   },
   strict: false,
@@ -107,6 +114,12 @@ function tokenizeXml(xml) {
       // Skip whitespace
       while (i < xml.length && /[\s\r\n]/.test(xml[i])) i++;
       if (i >= xml.length || xml[i] === '>' || (xml[i] === '/' && xml[i+1] === '>')) break;
+      // Skip HTML comments inside tags (Bug 8: Framer XML embeds <!-- --> between attrs)
+      if (xml.startsWith('<!--', i)) {
+        const end = xml.indexOf('-->', i);
+        i = end >= 0 ? end + 3 : xml.length;
+        continue;
+      }
 
       // Attr name
       const attrStart = i;
@@ -325,6 +338,7 @@ function resolveImageSrc(bgImageAttr, imageMap) {
   return wrapImageSrc({ url });
 }
 
+
 function resolveLineHeight(lineHeight) {
   if (!lineHeight) return null;
   const raw = String(lineHeight).trim();
@@ -354,9 +368,11 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
     }
     if (stackGap) props['gap'] = wrapSize(stackGap);
     if (padding)  props['padding'] = wrapDimensions(padding);
-    if (maxWidth) props['max-width'] = wrapSize(maxWidth);
-    if (width)    props['width']    = wrapSize(width);
-    if (height)   props['height']   = wrapSize(height);
+    // Filter non-numeric CSS keywords (fit-content, auto, etc.) — Elementor
+    // Style_Parser rejects $$type:"string" for dimension properties.
+    if (maxWidth && isDimensionValue(maxWidth)) props['max-width'] = wrapSize(maxWidth);
+    if (width    && isDimensionValue(width))    props['width']    = wrapSize(width);
+    if (height   && isDimensionValue(height))   props['height']   = wrapSize(height);
 
     const bgVal = backgroundColor || bgColor;
     if (bgVal) {
@@ -386,8 +402,8 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
 
   // ── Image ──
   if (widgetType === 'e-image') {
-    if (width)  props['width']  = wrapSize(width);
-    if (height) props['height'] = wrapSize(height);
+    if (width  && isDimensionValue(width))  props['width']  = wrapSize(width);
+    if (height && isDimensionValue(height)) props['height'] = wrapSize(height);
   }
 
   // ── Border radius (all widget types) ──
@@ -458,10 +474,46 @@ function resolvePassThrough(xmlNode, depth) {
   return resolvePassThrough(meaningful[0], depth);
 }
 
+// ── Bug 8 Fix: Extract text from Framer Component Instance attributes ──
+// Framer components store text in dynamically-named attributes
+// (e.g. nUjzUoV6a="See how we work with you"). This heuristic scans
+// all attrs of component instances for the best text candidate.
+function extractComponentText(attrs) {
+  if (!attrs.componentId && !attrs.variant) return undefined;
+
+  let bestText = undefined;
+
+  for (const [key, val] of Object.entries(attrs)) {
+    // Skip known system/meta keys
+    if (['componentId', 'variant', 'name', 'id', 'nodeId', 'tag', 'href',
+          'target', 'layout', 'overflow', 'position', 'opacity'].includes(key)) continue;
+    // Skip style-reference keys (uppercase-camel identifiers like `backgroundColor`)
+    if (/^[A-Z]/.test(key)) continue;
+
+    const str = String(val).trim();
+
+    if (str.length < 3) continue;                // Too short
+    if (str === 'true' || str === 'false') continue; // Boolean
+    if (str.startsWith('http') || str.startsWith('/') || str.startsWith('#')) continue; // URL / style path / hash
+    if (/^-?\d*\.?\d+$/.test(str)) continue;     // Numeric
+    if (/^[a-zA-Z0-9_-]{8,15}$/.test(str) && !str.includes(' ')) continue; // Gen-ID pattern
+
+    // Pick longest — component text attrs are typically the longest readable string
+    if (!bestText || str.length > bestText.length) {
+      bestText = str;
+    }
+  }
+
+  return bestText;
+}
+
 function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0) {
   const { attrs } = xmlNode;
-  // Bug 1 Fix: resolve text from attribute first, then child text content
-  const textContent = attrs.text !== undefined ? attrs.text : (xmlNode._textContent || undefined);
+  // Bug 1+8 Fix: resolve text from component attrs > explicit text attr > child text
+  const compText = extractComponentText(attrs);
+  const textContent = compText !== undefined
+    ? compText
+    : (attrs.text !== undefined ? attrs.text : (xmlNode._textContent || undefined));
   // Build enriched attrs with resolved text for type detection
   const enrichedAttrs = textContent !== undefined ? { ...attrs, text: textContent } : attrs;
 
@@ -479,13 +531,7 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
   // Build base props
   const props = buildStyleProps(enrichedAttrs, widgetType, tokenMapping, fontResolution, imageMap);
 
-  // Determine style $$type
-  const styleTypeMap = {
-    'e-flexbox': 'flexbox', 'e-heading': 'heading',
-    'e-paragraph': 'text-editor', 'e-image': 'image', 'e-button': 'button',
-    'e-svg': 'svg',
-  };
-  const styleType = styleTypeMap[widgetType] || 'flexbox';
+
 
   // ── Settings ──
   const settings = {
@@ -514,8 +560,8 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
 
   if (widgetType === 'e-image') {
     const imgSrc = resolveImageSrc(attrs.backgroundImage || attrs.src, imageMap);
-    if (imgSrc) settings['image-src'] = imgSrc;
-    else        settings['image-src'] = wrapImageSrc({ id: 0 });
+    if (imgSrc) settings['image'] = wrapImage(imgSrc);
+    else        settings['image'] = wrapImage(wrapImageSrc({ id: 0 }));
   }
 
   if (widgetType === 'e-svg') {
@@ -525,15 +571,18 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
     if (attrs.height) settings.height = wrapSize(attrs.height);
   }
 
-  // ── Style variants ──
+  // ── Style variants (VERBOSE format: id/type/label required by elementor-set-content) ──
   const baseVariant = {
-    meta:  { breakpoint: null, state: null },
+    meta:  { breakpoint: 'desktop', state: null },
     props: Object.keys(props).length > 0 ? props : {},
+    custom_css: null,
   };
 
   const styles = {
     [styleId]: {
-      '$$type':   styleType,
+      id: styleId,
+      type: 'class',
+      label: 'local',
       variants: [baseVariant],
     },
   };
@@ -554,8 +603,14 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
     }
   }
 
-  const node = { widgetType, id: widgetId, settings, styles };
-  if (v4Children.length > 0) node.children = v4Children;
+  // ── Determine elType (required by elementor-set-content) ──
+  // Atomic containers (e-flexbox, e-div-block) are Elementor element types.
+  // Atomic widgets (e-heading, e-paragraph, ...) use elType:"widget" + widgetType.
+  const ATOMIC_ELEMENT_TYPES = new Set(['e-flexbox', 'e-div-block']);
+  const elType = ATOMIC_ELEMENT_TYPES.has(widgetType) ? widgetType : 'widget';
+
+  const node = { elType, widgetType, id: widgetId, settings, styles };
+  if (v4Children.length > 0) node.elements = v4Children;
 
   return node;
 }
@@ -637,12 +692,44 @@ const v4Tree = xmlRoots
 const result = v4Tree.length === 1 ? v4Tree[0] : v4Tree;
 const output = JSON.stringify(result, null, 2);
 
-if (args.output) {
-  fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
-  fs.writeFileSync(args.output, output, 'utf8');
-  process.stderr.write(`Saved to ${args.output}\n`);
-} else {
+// Determine output path — use temp file when validating without --output
+const outputPath = args.output || (args.validate ? path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'v4tree-')), 'tree.json') : null);
+
+if (outputPath) {
+  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+  fs.writeFileSync(outputPath, output, 'utf8');
+  if (args.output) process.stderr.write(`Saved to ${outputPath}\n`);
+}
+
+// --validate: run validate-v4-tree.js on the output
+let validationPassed = true;
+if (args.validate && outputPath) {
+  const validatorScript = path.join(__dirname, 'validate-v4-tree.js');
+  process.stderr.write(`Validating ${outputPath} …\n`);
+  const val = spawnSync('node', [validatorScript, outputPath], { stdio: 'pipe', encoding: 'utf8' });
+  if (val.stderr) process.stderr.write(val.stderr);
+  if (val.stdout) {
+    try {
+      const result = JSON.parse(val.stdout);
+      const icon = result.passed ? '✅' : '❌';
+      process.stderr.write(`${icon} Score: ${result.score}% | ${result.stats.totalErrors} errors, ${result.stats.totalWarnings} warnings\n`);
+      if (!result.passed) validationPassed = false;
+    } catch {
+      process.stderr.write(val.stdout.slice(0, 500) + '\n');
+      validationPassed = false;
+    }
+  }
+  if (val.status !== 0) validationPassed = false;
+}
+
+// Print to stdout when no --output
+if (!args.output) {
   process.stdout.write(output + '\n');
+}
+
+// Cleanup temp dir
+if (!args.output && outputPath) {
+  try { fs.rmSync(path.dirname(outputPath), { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 process.stderr.write(`✓ ${usedStyleIds.size} V4 nodes converted, ${warnings.length} warnings\n`);
@@ -650,4 +737,4 @@ if (warnings.length > 0 && args.verbose) {
   warnings.forEach(w => process.stderr.write(`  ⚠ ${w}\n`));
 }
 
-process.exit(warnings.length > 0 ? 1 : 0);
+process.exit(warnings.length > 0 || !validationPassed ? 1 : 0);
