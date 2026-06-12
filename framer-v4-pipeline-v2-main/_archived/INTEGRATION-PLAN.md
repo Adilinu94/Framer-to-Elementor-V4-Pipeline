@@ -51,9 +51,9 @@ lib/
 Solar.local exponiert NUR diese 3 MCP-Tools — alle Abilities laufen DURCH den Adapter:
 
 ```
-❌ Direkt:   novamira/adrians-export-design-system {}
+❌ Direkt:   novamira-adrianv2/export-design-system {}
 ✅ Korrekt:  mcp-adapter-execute-ability {
-               ability_name: "novamira/adrians-export-design-system",
+               ability_name: "novamira-adrianv2/export-design-system",
                parameters: {}
              }
 ```
@@ -292,7 +292,7 @@ async call(ability, params = {}, options = {}) {
 node -e "
 import('./scripts/lib/mcp-bridge.js').then(async ({ McpBridge }) => {
   const mcp = await McpBridge.fromConfig();
-  const r = await mcp.call('novamira/adrians-greet', { name: 'Pipeline-Test' });
+  const r = await mcp.call('novamira-adrianv2/greet', { name: 'Pipeline-Test' });
   console.log('✅ Bridge OK:', r);
 }).catch(e => console.error('❌', e.message));
 "
@@ -303,7 +303,7 @@ import('./scripts/lib/mcp-bridge.js').then(async ({ McpBridge }) => {
 ## Fix B — asset-to-wp-media.js: Batch-Upload nutzen
 
 **Problem:** Script generiert eine Queue-Datei mit N einzelnen MCP-Calls. Agent muss jeden manuell ausführen.  
-`adrians-batch-media-upload` (max 30 Dateien, 10MB/Datei) ist verfügbar und implementiert.
+`novamira-adrianv2/batch-media-upload` (max 30 Dateien, 10MB/Datei) ist verfügbar und implementiert.
 
 **Datei:** `scripts/asset-to-wp-media.js`
 
@@ -522,7 +522,7 @@ async function executeGcPlan(plan, treePath, mcp) {
   const gcIdMap = {}; // label → gc-id (von setup-v4-foundation zurückbekommen)
   
   // 1. setup-v4-foundation aufrufen → aktuelle GC-IDs + Variable-IDs holen
-  const foundation = await mcp.call('novamira/adrians-setup-v4-foundation', {});
+  const foundation = await mcp.call('novamira-adrianv2/setup-v4-foundation', {});
   const existingClasses = foundation.classes || {}; // label → id
   
   for (const gc of plan.suggested_classes) {
@@ -553,7 +553,7 @@ echo json_encode(['id' => 'gc-' . $post, 'post_id' => $post]);
     
     // 3. Basis-Variant setzen (desktop, keine state)
     if (gc.props && Object.keys(gc.props).length > 0) {
-      await mcp.call('novamira/adrians-add-global-class-variant', {
+      await mcp.call('novamira-adrianv2/add-global-class-variant', {
         class_id: gcId,
         breakpoint: 'desktop',
         props: gc.props,
@@ -562,7 +562,7 @@ echo json_encode(['id' => 'gc-' . $post, 'post_id' => $post]);
     
     // 4. Responsive Varianten setzen
     for (const variant of gc.variants || []) {
-      await mcp.call('novamira/adrians-add-global-class-variant', {
+      await mcp.call('novamira-adrianv2/add-global-class-variant', {
         class_id: gcId,
         breakpoint: variant.breakpoint,
         props: variant.props,
@@ -571,7 +571,7 @@ echo json_encode(['id' => 'gc-' . $post, 'post_id' => $post]);
     
     // 5. Variable-Referenzen setzen (Token-Bindung)
     for (const binding of gc.variable_bindings || []) {
-      await mcp.call('novamira/adrians-apply-variable-to-class', {
+      await mcp.call('novamira-adrianv2/apply-variable-to-class', {
         class_id: gcId,
         breakpoint: 'desktop',
         prop: binding.prop,
@@ -637,10 +637,10 @@ Exit-Codes:
   2 = MCP nicht erreichbar
 
 Ruft parallel auf:
-  1. novamira/adrians-layout-audit   { post_id }
-  2. novamira/adrians-visual-qa      { post_id, breakpoints }
-  3. novamira/adrians-responsive-audit { post_id }
-  4. novamira/adrians-variable-audit  { report: "drift" }
+  1. novamira-adrianv2/layout-audit   { post_id }
+  2. novamira-adrianv2/visual-qa      { post_id, breakpoints }
+  3. novamira-adrianv2/responsive-audit { post_id }
+  4. novamira-adrianv2/variable-audit  { report: "drift" }
 
 Dedupliziert visual-qa Output (interne deduplicate-visual-qa.js Logik).
 Schreibt konsolidierten qa-report.json:
@@ -664,10 +664,10 @@ const mcp = await McpBridge.fromConfig();
 
 // Alle 4 QA-Calls parallel (read-only — keine Race Conditions)
 const [layoutRes, visualRes, responsiveRes, variablesRes] = await Promise.allSettled([
-  args['skip-layout']     ? null : mcp.call('novamira/adrians-layout-audit',     { post_id }),
-  args['skip-visual']     ? null : mcp.call('novamira/adrians-visual-qa',        { post_id, breakpoints }),
-  args['skip-responsive'] ? null : mcp.call('novamira/adrians-responsive-audit', { post_id }),
-  args['skip-variables']  ? null : mcp.call('novamira/adrians-variable-audit',   { report: 'drift' }),
+  args['skip-layout']     ? null : mcp.call('novamira-adrianv2/layout-audit',     { post_id }),
+  args['skip-visual']     ? null : mcp.call('novamira-adrianv2/visual-qa',        { post_id, breakpoints }),
+  args['skip-responsive'] ? null : mcp.call('novamira-adrianv2/responsive-audit', { post_id }),
+  args['skip-variables']  ? null : mcp.call('novamira-adrianv2/variable-audit',   { report: 'drift' }),
 ]);
 
 // Ergebnisse auswerten + deduplizieren
@@ -699,11 +699,11 @@ In den **Kritischen Regeln** die Cache-Regel präzisieren:
 ## Kritische Regeln (niemals brechen)
 
 # ÄNDERN:
-2. NIEMALS IDs aus Memory -> adrians-setup-v4-foundation IMMER live aufrufen
+2. NIEMALS IDs aus Memory -> setup-v4-foundation IMMER live aufrufen
 
 # ERSETZEN DURCH:
 2. setup-v4-foundation NIEMALS cachen (GV-IDs und GC-IDs sind session-live)
-   adrians-export-design-system DARF 5 Minuten gecacht werden (ist read-only)
+   export-design-system DARF 5 Minuten gecacht werden (ist read-only)
    Das Cache-Verbot gilt NUR für mutable state, nicht für read-only Exports
 ```
 
@@ -730,31 +730,31 @@ const endpointMap = {
   // Bisherige 4:
   'novamira/elementor-set-content': ...,
   'novamira/elementor-get-content': ...,
-  'novamira/adrians-export-design-system': ...,
-  'novamira/adrians-media-upload': ...,
+  'novamira-adrianv2/export-design-system': ...,
+  'novamira-adrianv2/media-upload': ...,
   
   // Neue:
-  'novamira/adrians-batch-media-upload': (p) => ({
+  'novamira-adrianv2/batch-media-upload': (p) => ({
     url: '/wp-json/novamira/v1/media/batch-upload',
     method: 'POST', body: p,
   }),
-  'novamira/adrians-setup-v4-foundation': (p) => ({
+  'novamira-adrianv2/setup-v4-foundation': (p) => ({
     url: `/wp-json/novamira/v1/elementor/foundation`,
     method: 'POST', body: p,
   }),
-  'novamira/adrians-layout-audit': (p) => ({
+  'novamira-adrianv2/layout-audit': (p) => ({
     url: `/wp-json/novamira/v1/elementor/layout-audit/${p.post_id}`,
     method: 'GET',
   }),
-  'novamira/adrians-visual-qa': (p) => ({
+  'novamira-adrianv2/visual-qa': (p) => ({
     url: `/wp-json/novamira/v1/elementor/visual-qa/${p.post_id}`,
     method: 'GET',
   }),
-  'novamira/adrians-variable-audit': (p) => ({
+  'novamira-adrianv2/variable-audit': (p) => ({
     url: `/wp-json/novamira/v1/elementor/variable-audit`,
     method: 'POST', body: p,
   }),
-  'novamira/adrians-batch-create-variables': (p) => ({
+  'novamira-adrianv2/batch-create-variables': (p) => ({
     url: '/wp-json/novamira/v1/elementor/variables/batch',
     method: 'POST', body: p,
   }),
@@ -928,8 +928,8 @@ Vollständige Liste der 43 verfügbaren Abilities auf solar.local (Stand 2026-06
 **Memory:**
 `memory-list` · `memory-get` · `memory-save` · `memory-delete`
 
-**Adrians Extra:**
-`adrians-get-page-markdown` · `adrians-page-settings` · `adrians-clone-element` · `adrians-list-templates` · `adrians-list-elementor-pages` · `adrians-reorder-element` · `adrians-duplicate-page` · `adrians-patch-element-styles` · `adrians-batch-build-page` · `adrians-global-widgets` · `adrians-remove-global-class` · `adrians-batch-class` · `adrians-add-global-class-variant` · `adrians-edit-global-class-variant` · `adrians-list-class-variants` · `adrians-apply-variable-to-class` · `adrians-edit-interaction` · `adrians-convert-kit-to-v4` · `adrians-kit-convert-v3-to-v4` · `adrians-setup-v4-foundation` · `adrians-create-component` · `adrians-insert-component` · `adrians-detach-component` · `adrians-export-design-system` · `adrians-import-design-system` · `adrians-batch-create-variables` · `adrians-batch-get-content` · `adrians-html-to-elementor-widget-plan` · `adrians-media-upload` · `adrians-list-media` · `adrians-edit-media` · `adrians-delete-media` · `adrians-media-usage` · `adrians-featured-image` · `adrians-batch-media-upload` · `adrians-page-audit` · `adrians-class-audit` · `adrians-responsive-audit` · `adrians-layout-audit` · `adrians-visual-qa` · `adrians-variable-audit` · `adrians-greet`
+**AdrianV2:**
+`novamira-adrianv2/get-page-markdown` · `novamira-adrianv2/page-settings` · `novamira-adrianv2/clone-element` · `novamira-adrianv2/list-templates` · `novamira-adrianv2/list-elementor-pages` · `novamira-adrianv2/reorder-element` · `novamira-adrianv2/duplicate-page` · `novamira-adrianv2/patch-element-styles` · `novamira-adrianv2/batch-build-page` · `novamira-adrianv2/global-widgets` · `novamira-adrianv2/remove-global-class` · `novamira-adrianv2/batch-class` · `novamira-adrianv2/add-global-class-variant` · `novamira-adrianv2/edit-global-class-variant` · `novamira-adrianv2/list-class-variants` · `novamira-adrianv2/apply-variable-to-class` · `novamira-adrianv2/edit-interaction` · `novamira-adrianv2/convert-kit-to-v4` · `novamira-adrianv2/kit-convert-v3-to-v4` · `novamira-adrianv2/setup-v4-foundation` · `novamira-adrianv2/create-component` · `novamira-adrianv2/insert-component` · `novamira-adrianv2/detach-component` · `novamira-adrianv2/export-design-system` · `novamira-adrianv2/import-design-system` · `novamira-adrianv2/batch-create-variables` · `novamira-adrianv2/batch-get-content` · `novamira-adrianv2/html-to-elementor-widget-plan` · `novamira-adrianv2/media-upload` · `novamira-adrianv2/list-media` · `novamira-adrianv2/edit-media` · `novamira-adrianv2/delete-media` · `novamira-adrianv2/media-usage` · `novamira-adrianv2/featured-image` · `novamira-adrianv2/batch-media-upload` · `novamira-adrianv2/page-audit` · `novamira-adrianv2/class-audit` · `novamira-adrianv2/responsive-audit` · `novamira-adrianv2/layout-audit` · `novamira-adrianv2/visual-qa` · `novamira-adrianv2/variable-audit` · `novamira-adrianv2/greet`
 
 **Skills:**
 `skill-get` · `skill-write` · `skill-edit` · `skill-delete`
@@ -946,7 +946,7 @@ Vollständige Liste der 43 verfügbaren Abilities auf solar.local (Stand 2026-06
 ✅ Config gefunden: .mcp.json
 ✅ Bridge initialisiert: https://solar.local/wp-json/mcp/novamira
 ✅ Session initialisiert via JSON-RPC 2.0
-⚠️  adrians-greet: Ability nicht registriert (Server-Seite, nicht Bridge)
+⚠️  greet: Ability nicht registriert (Server-Seite, nicht Bridge)
 ✅ Cache funktioniert: 721ms → 0ms (2. Call gecacht)
 Exit: 0
 ```
