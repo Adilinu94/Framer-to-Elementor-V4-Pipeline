@@ -1,0 +1,34 @@
+# Node
+node_modules/
+
+# PHP
+vendor/
+
+# Build artifacts
+results/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archives
+*.zip
+*.rar
+*.7z
+
+# Temp files
+*.tmp
+nul
+_gen-*.js
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
