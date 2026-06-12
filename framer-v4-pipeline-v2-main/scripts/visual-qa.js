@@ -27,17 +27,17 @@
  * ── Server-seitige QA via Novamira MCP (empfohlen nach Build) ───────────────
  * Zusätzlich zu den Browser-Checks sollte der Agent diese MCP-Abilities aufrufen:
  *
- *   novamira/adrians-visual-qa { post_id }
+ *   novamira-adrianv2/visual-qa { post_id }
  *     → Server-seitig: overflow-Risiken, z-index Konflikte, negative margins,
  *       absolute-positioned overlap — OHNE Browser nötig
  *
- *   novamira/adrians-responsive-audit { post_id }
+ *   novamira-adrianv2/responsive-audit { post_id }
  *     → Breakpoint-Coverage: aktive Breakpoints, v4 style variants, Visibility
  *
- *   novamira/adrians-class-audit { scope: "post_ids", post_ids: [<ID>] }
+ *   novamira-adrianv2/class-audit { scope: "post_ids", post_ids: [<ID>] }
  *     → Unused GCs, fehlende Klassen-Bindungen
  *
- *   novamira/adrians-layout-audit { post_id }
+ *   novamira-adrianv2/layout-audit { post_id }
  *     → Unnötige Container-Verschachtelung, single-child wrapper, pass-through
  *
  * Usage:

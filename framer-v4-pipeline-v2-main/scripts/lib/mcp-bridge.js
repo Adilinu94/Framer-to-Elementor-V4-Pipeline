@@ -13,9 +13,9 @@
  *                        arguments: { ability_name: "...", parameters: {...} } }
  *
  *   Alle Novamira-Abilities laufen DURCH den Adapter:
- *     ❌ Direkt:   novamira/adrians-export-design-system {}
+ *     ❌ Direkt:   novamira-adrianv2/export-design-system {}
  *     ✅ Korrekt:  mcp-adapter-execute-ability {
- *                    ability_name: "novamira/adrians-export-design-system",
+ *                    ability_name: "novamira-adrianv2/export-design-system",
  *                    parameters: {}
  *                  }
  *
@@ -345,7 +345,7 @@ export class McpBridge {
    * Diese Methode ist der zentrale Einstiegspunkt für alle MCP-Calls.
    * Scripts rufen mcp.call('novamira/<ability>', { params }) auf.
    *
-   * @param {string}       ability         Ability-Name (z.B. "novamira/adrians-greet")
+   * @param {string}       ability         Ability-Name (z.B. "novamira-adrianv2/greet")
    * @param {object}       [params={}]     Ability-Parameter
    * @param {object}       [options={}]    Call-Optionen
    * @param {boolean}      [options.cache=true]  Cache für read-only Abilities verwenden
@@ -580,57 +580,57 @@ export class McpBridge {
     }),
 
     // Design System
-    'novamira/adrians-export-design-system': (p) => ({
+    'novamira-adrianv2/export-design-system': (p) => ({
       url: `/wp-json/novamira/v1/design-system/export${p.what ? `?what=${encodeURIComponent(p.what)}` : ''}`,
       method: 'GET',
     }),
 
     // Media
-    'novamira/adrians-media-upload': (p) => ({
+    'novamira-adrianv2/media-upload': (p) => ({
       url: '/wp-json/novamira/v1/media/upload',
       method: 'POST', body: p,
     }),
-    'novamira/adrians-batch-media-upload': (p) => ({
+    'novamira-adrianv2/batch-media-upload': (p) => ({
       url: '/wp-json/novamira/v1/media/batch-upload',
       method: 'POST', body: p,
     }),
 
     // Foundation (cache-verboten)
-    'novamira/adrians-setup-v4-foundation': (p) => ({
+    'novamira-adrianv2/setup-v4-foundation': (p) => ({
       url: '/wp-json/novamira/v1/elementor/foundation',
       method: 'POST', body: p,
     }),
 
     // QA & Audit
-    'novamira/adrians-layout-audit': (p) => ({
+    'novamira-adrianv2/layout-audit': (p) => ({
       url: `/wp-json/novamira/v1/elementor/layout-audit/${p.post_id}`,
       method: 'GET',
     }),
-    'novamira/adrians-visual-qa': (p) => ({
+    'novamira-adrianv2/visual-qa': (p) => ({
       url: `/wp-json/novamira/v1/elementor/visual-qa/${p.post_id}`,
       method: 'GET',
     }),
-    'novamira/adrians-responsive-audit': (p) => ({
+    'novamira-adrianv2/responsive-audit': (p) => ({
       url: `/wp-json/novamira/v1/elementor/responsive-audit/${p.post_id}`,
       method: 'GET',
     }),
-    'novamira/adrians-variable-audit': (p) => ({
+    'novamira-adrianv2/variable-audit': (p) => ({
       url: '/wp-json/novamira/v1/elementor/variable-audit',
       method: 'POST', body: p,
     }),
 
     // Variables
-    'novamira/adrians-batch-create-variables': (p) => ({
+    'novamira-adrianv2/batch-create-variables': (p) => ({
       url: '/wp-json/novamira/v1/elementor/variables/batch',
       method: 'POST', body: p,
     }),
 
     // Global Classes
-    'novamira/adrians-add-global-class-variant': (p) => ({
+    'novamira-adrianv2/add-global-class-variant': (p) => ({
       url: '/wp-json/novamira/v1/elementor/class-variant',
       method: 'POST', body: p,
     }),
-    'novamira/adrians-apply-variable-to-class': (p) => ({
+    'novamira-adrianv2/apply-variable-to-class': (p) => ({
       url: '/wp-json/novamira/v1/elementor/class-variable',
       method: 'POST', body: p,
     }),
@@ -709,7 +709,7 @@ export class McpBridge {
   // ── Spezialisierte Methoden ──────────────────────────────────────────────
 
   /**
-   * Batch-Media-Upload via novamira/adrians-batch-media-upload.
+   * Batch-Media-Upload via novamira-adrianv2/batch-media-upload.
    *
    * @param {Array<{filename: string, mime_type: string, content_base64: string}>} files
    * @returns {Promise<object>} Upload-Ergebnis mit wp_media_id-Mappings
@@ -721,7 +721,7 @@ export class McpBridge {
 
     this._log(`Batch-Media-Upload: ${files.length} Dateien...`);
 
-    return this.call('novamira/adrians-batch-media-upload', { files }, {
+    return this.call('novamira-adrianv2/batch-media-upload', { files }, {
       cache: false,
       maxRetries: 1, // Weniger Retries für Uploads (Datenvolumen)
     });
@@ -808,9 +808,9 @@ if (process.argv.includes('--self-test')) {
     }
 
     // 3. Verbindungstest via greet
-    console.log('\n🔌 Teste Verbindung (novamira/adrians-greet)...');
+    console.log('\n🔌 Teste Verbindung (novamira-adrianv2/greet)...');
     try {
-      const greeting = await bridge.call('novamira/adrians-greet', { name: 'Pipeline-Smoke-Test' });
+      const greeting = await bridge.call('novamira-adrianv2/greet', { name: 'Pipeline-Smoke-Test' });
       console.log(`✅ Verbindung OK: ${JSON.stringify(greeting).slice(0, 200)}`);
     } catch (err) {
       console.log(`❌ Verbindungstest fehlgeschlagen: ${err.message}`);
@@ -827,12 +827,12 @@ if (process.argv.includes('--self-test')) {
     // 4. Cache-Test
     console.log('\n📦 Teste Cache (export-design-system — read-only)...');
     const startCached = Date.now();
-    await bridge.call('novamira/adrians-export-design-system', {});
+    await bridge.call('novamira-adrianv2/export-design-system', {});
     const cachedDuration = Date.now() - startCached;
     console.log(`   Erster Call: ${cachedDuration}ms`);
 
     const startCached2 = Date.now();
-    await bridge.call('novamira/adrians-export-design-system', {});
+    await bridge.call('novamira-adrianv2/export-design-system', {});
     const cachedDuration2 = Date.now() - startCached2;
     console.log(`   Zweiter Call: ${cachedDuration2}ms ${cachedDuration2 < 100 ? '(✅ gecacht)' : '(⚠️ nicht gecacht)'}`);
 

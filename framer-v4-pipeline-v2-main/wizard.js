@@ -149,7 +149,7 @@ async function runPreflight(formatJson) {
     const { McpBridge } = await import(pathToFileURL(path.join(pipelineDir, 'scripts', 'lib', 'mcp-bridge.js')).href);
     const mcp = await McpBridge.fromConfig();
     try {
-      await mcp.call('novamira/adrians-greet', { name: 'preflight' });
+      await mcp.call('novamira-adrianv2/greet', { name: 'preflight' });
       mcpCheck.result = true;
       mcpCheck.detail = 'greet OK';
     } catch {
@@ -318,9 +318,9 @@ async function runPreview(postId) {
 
     // 4. Page-Settings übertragen (optional)
     try {
-      const settings = await mcp.call('novamira/adrians-page-settings', { post_id: pid, action: 'get' });
+      const settings = await mcp.call('novamira-adrianv2/page-settings', { post_id: pid, action: 'get' });
       if (settings && !settings.error) {
-        await mcp.call('novamira/adrians-page-settings', {
+        await mcp.call('novamira-adrianv2/page-settings', {
           post_id: previewId,
           action: 'set',
           settings: settings,
@@ -644,6 +644,10 @@ async function main() {
       { args: ['scripts/extract-responsive-breakpoints.js', '--css', exportHtml, '--output', path.join(tokensDir, 'responsive-breakpoints.json')], desc: 'Extrahiere Responsive Breakpoints' },
       { args: ['scripts/extract-framer-styles.js', '--html', exportHtml, '--output', path.join(tokensDir, 'extracted-styles.json')], desc: 'Extrahiere CSS-Properties und Variablen' },
       { args: ['scripts/design-token-extractor.js', '--html', exportHtml, '--output', path.join(tokensDir, 'token-mapping.json'), '--variables-plan', path.join(tokensDir, 'variables-plan.json')], desc: 'Erzeuge Design-Token-Mapping und Variablen-Plan' },
+      // RC-15: Animation Workflow — Extrahiere Framer Animationen und generiere GSAP-Plan
+      ...(targetPostId && targetPostId !== 'new'
+        ? [{ args: ['scripts/framer-animation-extractor.js', '--html', exportHtml, '--post-id', targetPostId, '--output', path.join(tokensDir, 'animation-plan.json')], desc: 'Extrahiere Framer Animationen → GSAP ScrollTrigger Plan (RC-15, post-spezifisch)' }]
+        : [{ args: ['scripts/framer-animation-extractor.js', '--html', exportHtml, '--output', path.join(tokensDir, 'animation-plan.json')], desc: 'Extrahiere Framer Animationen → GSAP ScrollTrigger Plan (RC-15)' }]),
       { args: ['scripts/html-to-widget-plan.js', '--html', exportHtml, '--output', path.join(tokensDir, 'widget-plan.json')], desc: 'HTML → Elementor Widget-Plan analysieren' }
     ];
 
@@ -697,7 +701,7 @@ async function main() {
           rollbackPlanPath = path.join(rootDir, 'rollback-plan.json');
           await fs.writeFile(rollbackPlanPath, JSON.stringify(plan, null, 2), 'utf8');
           log.success(`Rollback-Plan gespeichert: ${path.relative(rootDir, rollbackPlanPath)}`);
-          console.error(`  → ${plan.mcp_calls.length} MCP-Calls (elementor-get-content + adrians-page-settings)`);
+          console.error(`  → ${plan.mcp_calls.length} MCP-Calls (elementor-get-content + novamira-adrianv2/page-settings)`);
           console.error('  → Agent: MCP-Calls ausführen → Ergebnisse an RollbackManager.backupPlan() übergeben');
         } else {
           log.info('Backup existiert bereits — überspringe.');
@@ -751,6 +755,7 @@ async function main() {
         extractedStyles: path.relative(rootDir, path.join(exportDir, 'tokens', 'extracted-styles.json')).replace(/\\/g, '/'),
         tokenMapping: path.relative(rootDir, path.join(exportDir, 'tokens', 'token-mapping.json')).replace(/\\/g, '/'),
         variablesPlan: path.relative(rootDir, path.join(exportDir, 'tokens', 'variables-plan.json')).replace(/\\/g, '/'),
+        animationPlan: path.relative(rootDir, path.join(exportDir, 'tokens', 'animation-plan.json')).replace(/\\/g, '/'),
         validation: existsSync(treePath) ? 'validation-report.json' : 'pending'
       },
       preview: targetPostIdNum ? {
@@ -760,34 +765,35 @@ async function main() {
       nextSteps: [
         '=== PRE-BUILD ===',
         '1. v4-tree.json generieren (convert-xml-to-v4.js oder Novamira Framer-Pipeline Skill).',
-        '2. MCP: novamira/adrians-export-design-system { what: all } -> design-system-export.json speichern.',
+        '2. MCP: novamira-adrianv2/export-design-system { what: all } -> design-system-export.json speichern.',
         '3. GV-IDs aus design-system-export.json in v4-tree.json eintragen (design-token-extractor.js).',
         '4. Optional: cross-validate-sources.js --design-system design-system-export.json --tree v4-tree.json',
         '5. Optional: generate-global-classes.js und asset-to-wp-media.js ausfuehren.',
+        '5a. Optional: framer-animation-extractor.js ausfuehren (animation-plan.json → inject-animation-code.js)',
         '6. patch-v4-tree-media-ids.js ausfuehren (Invariant IV).',
         '7. framer-pre-build-validate.js --tree v4-tree.json (Score muss >= 85 sein).',
         '=== ROLLBACK & SPLIT ===',
         `8. ROLLBACK: MCP-Calls aus ${rollbackPlanPath ? path.relative(rootDir, rollbackPlanPath) : 'rollback-plan.json'} ausfuehren.`,
-        `   → elementor-get-content + adrians-page-settings → Ergebnisse an RollbackManager.backupPlan() uebergeben.`,
+        `   → elementor-get-content + novamira-adrianv2/page-settings → Ergebnisse an RollbackManager.backupPlan() uebergeben.`,
         `9. SPLIT: ${splitPlanPath ? `Falls Tree >50 Elemente → MCP-Calls aus ${path.relative(rootDir, splitPlanPath)} ausfuehren.` : 'Tree passt in einen Call.'}`,
         '=== PREVIEW (NEU v0.7.0) ===',
         '10. PREVIEW: node wizard.js preview --post-id <ID> → erstellt Preview-Page.',
         '    PROMOTE: node wizard.js promote --preview-id <ID> --target-id <ID> → schiebt Preview live.',
         '=== BUILD ===',
-        '11. MCP: novamira/adrians-setup-v4-foundation { post_id: <ID> } aufrufen -> session-ids sichern.',
-        '12. MCP: novamira/elementor-set-content (NICHT adrians-batch-build-page fuer Framer-Trees!).',
+        '11. MCP: novamira-adrianv2/setup-v4-foundation { post_id: <ID> } aufrufen -> session-ids sichern.',
+        '12. MCP: novamira/elementor-set-content (NICHT batch-build-page fuer Framer-Trees!).',
         '=== ROLLBACK BEI FEHLER ===',
         '    Bei Build-Fehler: RollbackManager.restorePlan(postId) aufrufen → restore-plan.json ausfuehren.',
         '=== POST-BUILD QA ===',
         '13. MCP: novamira/elementor-get-content -> als elementor-dump.json speichern.',
         '14. verify-build-binding.js elementor-dump.json (Invariant I).',
         '15. validate-v4-tree.js elementor-dump.json (Invariant I-V).',
-        '16. MCP: novamira/adrians-layout-audit { post_id: <ID> } -- Pass-through, Nesting, Grid-Kandidaten.',
-        '17. MCP: novamira/adrians-visual-qa { post_id: <ID>, breakpoints: [desktop, tablet, mobile] }.',
-        '18. MCP: novamira/adrians-responsive-audit { post_id: <ID> } -- Breakpoint-Coverage.',
-        '19. MCP: novamira/adrians-variable-audit { report: "drift" } -- e-gv-* Drift-Check.',
-        '20. Bei Style-Fehlern: adrians-patch-element-styles { post_id, patches: [{element_id, ...}] }.',
-        '21. Bei GC-Problemen: adrians-add-global-class-variant / adrians-edit-global-class-variant.',
+        '16. MCP: novamira-adrianv2/layout-audit { post_id: <ID> } -- Pass-through, Nesting, Grid-Kandidaten.',
+        '17. MCP: novamira-adrianv2/visual-qa { post_id: <ID>, breakpoints: [desktop, tablet, mobile] }.',
+        '18. MCP: novamira-adrianv2/responsive-audit { post_id: <ID> } -- Breakpoint-Coverage.',
+        '19. MCP: novamira-adrianv2/variable-audit { report: "drift" } -- e-gv-* Drift-Check.',
+        '20. Bei Style-Fehlern: novamira-adrianv2/patch-element-styles { post_id, patches: [{element_id, ...}] }.',
+        '21. Bei GC-Problemen: novamira-adrianv2/add-global-class-variant / novamira-adrianv2/edit-global-class-variant.',
         '    Kein Tree-Rebuild noetig fuer Responsive-Fixes auf Global Classes.'
       ]
     };

@@ -3,7 +3,7 @@
  * scripts/inject-animation-code.js
  *
  * Liest eine Animation-Plan-Datei (animation-plan.json) oder einzelne CLI-Argumente
- * und gibt einen MCP-Plan aus, den der Claude-Agent als novamira/adrians-code-injector
+ * und gibt einen MCP-Plan aus, den der Claude-Agent als novamira-adrianv2/code-injector
  * Calls ausführt.
  *
  * Anwendungsfälle:
@@ -143,12 +143,12 @@ if (snippetSpecs.length === 0) {
 }
 
 const mcpPlan = {
-  description: 'Novamira adrians-code-injector MCP-Plan',
+  description: 'Novamira novamira-adrianv2/code-injector MCP-Plan',
   generated_at: new Date().toISOString(),
   total: snippetSpecs.length,
   steps: snippetSpecs.map((spec, i) => ({
     step: i + 1,
-    ability: 'novamira/adrians-code-injector',
+    ability: 'novamira-adrianv2/code-injector',
     parameters: buildParameters(spec),
   })),
 };
@@ -172,7 +172,7 @@ snippetSpecs.forEach((s, i) => {
 console.log(`\n─── Agent-Anweisung ───────────────────────────────────`);
 console.log(`Führe alle ${snippetSpecs.length} Schritte in animation-mcp-plan.json aus:`);
 console.log(`  Tool:    novamira-solar-local:mcp-adapter-execute-ability`);
-console.log(`  Format:  { ability_name: "novamira/adrians-code-injector", parameters: { ... } }`);
+console.log(`  Format:  { ability_name: "novamira-adrianv2/code-injector", parameters: { ... } }`);
 console.log(`\nErgebnisse als injection-results.json speichern, dann:`);
 console.log(`  node scripts/inject-animation-code.js --apply-results injection-results.json\n`);
 

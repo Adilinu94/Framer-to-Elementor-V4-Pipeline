@@ -24,7 +24,7 @@ npm run test:e2e        # 12 E2E-Tests
 | 0 | MCP-Check | Wizard |
 | 1 | FramerExport — HTML/CSS/Assets lokal spiegeln | Wizard |
 | 2 | Token-Extraktion | `npm run token-extract` |
-| 3 | Variables in WordPress anlegen | `adrians-batch-create-variables` |
+| 3 | Variables in WordPress anlegen | `novamira-adrianv2/batch-create-variables` |
 | 4 | Konvertierung + GC + Media | `convert` → `auto-scale` → `gc-generate` → `patch-media` |
 | 5 | Validierung (Score ≥ 85%) | `npm run validate` + `npm run schema-validate` |
 | 6 | Cross-Validation | `npm run cross-validate` |
@@ -232,8 +232,8 @@ npm run token-extract -- \
   --variables-plan tokens/variables-plan.json
 
 # Phase 3 — Variables in WP anlegen
-# → variables-plan.json → mcpCall ausführen: novamira/adrians-batch-create-variables { variables, strategy: "skip" }
-# → novamira/adrians-export-design-system { what: "all" } → design-system-export.json
+# → variables-plan.json → mcpCall ausführen: novamira-adrianv2/batch-create-variables { variables, strategy: "skip" }
+# → novamira-adrianv2/export-design-system { what: "all" } → design-system-export.json
 # → npm run token-extract -- ... --design-system design-system-export.json (GV-IDs eintragen)
 
 # Phase 4 — Konvertierung
@@ -254,20 +254,20 @@ npm run cross-validate -- \
   --design-system design-system-export.json
 
 # Phase 7 — Build
-# novamira/adrians-setup-v4-foundation { post_id }
+# novamira-adrianv2/setup-v4-foundation { post_id }
 # novamira/elementor-set-content { post_id, content: [ARRAY!] }
 
 # Phase 8 — Post-Build QA
 npm run check-binding -- elementor-dump.json          # Invariant I
-# novamira/adrians-layout-audit { post_id }            # ⭐ NEU: Nesting, Pass-through, Grid-Kandidaten
-# novamira/adrians-visual-qa { post_id }               # overflow, z-index
-# novamira/adrians-responsive-audit { post_id }        # Breakpoint-Coverage
-# novamira/adrians-class-audit { scope: "post_ids", post_ids: [ID] } # unused GCs
-# novamira/adrians-variable-audit { report: "drift" }  # ⭐ NEU: e-gv-* Drift-Check (Fix 5 ✓)
+# novamira-adrianv2/layout-audit { post_id }            # ⭐ NEU: Nesting, Pass-through, Grid-Kandidaten
+# novamira-adrianv2/visual-qa { post_id }               # overflow, z-index
+# novamira-adrianv2/responsive-audit { post_id }        # Breakpoint-Coverage
+# novamira-adrianv2/class-audit { scope: "post_ids", post_ids: [ID] } # unused GCs
+# novamira-adrianv2/variable-audit { report: "drift" }  # ⭐ NEU: e-gv-* Drift-Check (Fix 5 ✓)
 npm run visual-qa -- --post-id <ID> --wp-url <URL> --dry-run
 
 # Batch-Zugriff auf mehrere Posts (Fix 4 ✓):
-# novamira/adrians-batch-get-content { post_ids: [ID1, ID2, ...], mode: "skeleton" }
+# novamira-adrianv2/batch-get-content { post_ids: [ID1, ID2, ...], mode: "skeleton" }
 ```
 
 ## Artefakt-Dateinamen
@@ -275,9 +275,9 @@ npm run visual-qa -- --post-id <ID> --wp-url <URL> --dry-run
 ```
 framer-nodes.xml              ← Unframer getNodeXml Output
 FramerExport/                 ← Lokaler HTML/CSS/Asset-Export
-design-system-export.json     ← adrians-export-design-system (LIVE, nie cachen!)
+design-system-export.json     ← novamira-adrianv2/export-design-system (LIVE, nie cachen!)
 tokens/token-mapping.json     ← CSS-Tokens → e-gv-* IDs
-tokens/variables-plan.json    ← MCP-Calls für adrians-batch-create-variables
+tokens/variables-plan.json    ← MCP-Calls für novamira-adrianv2/batch-create-variables
 tokens/image-map.json         ← Framer-URL → WP Media ID
 tokens/gc-plan.json           ← GC-Vorschläge + post_build_steps
 v4-tree.json                  ← convert-xml-to-v4 Output
@@ -298,12 +298,12 @@ build-manifest.json           ← Wizard Summary mit allen Pfaden
 | IV | Wenn `image-src.value.id` gesetzt: `url`-Key darf NICHT existieren (nie `url: null`) |
 | V | `custom_css`: immer `{"raw": "..."}` — nie plain String |
 | API | `elementor-set-content.content` = **Array**, nie einzelnes Objekt |
-| API | `adrians-batch-create-variables`: Parameter heißt `strategy`, NICHT `conflict_resolution` |
+| API | `novamira-adrianv2/batch-create-variables`: Parameter heißt `strategy`, NICHT `conflict_resolution` |
 | ADAPTER | `mcp-adapter-execute-ability`: Parameter heißt **`ability_name`** (nicht `ability`, nicht `abilityName`) — betrifft solar.local und alle Adapter-Instanzen |
 | ADAPTER | Signatur: `{ ability_name: string, parameters: object }` — beide Felder required |
-| ELEMENT_ID | `adrians-add-element` akzeptiert jetzt `element_id` (kebab-case) → wird `data-id` + CSS-Klasse `s-<id>` auf Server. `uniqueWidgetId()` Output direkt verwenden — macht `adrians-patch-element-styles` danach präziser |
-| BATCH_GET | `adrians-batch-get-content` ersetzt N×`elementor-get-content` Calls. Max 50 Posts, Modi: skeleton/settings/full. Fix 4 damit **obsolet** |
-| VAR_AUDIT | `adrians-variable-audit` scannt e-gv-* Drift Site-weit. `report: "drift"` für nur Broken References. Fix 5 damit **obsolet** |
+| ELEMENT_ID | `novamira-adrianv2/add-flexbox`/`add-div-block` akzeptiert jetzt `element_id` (kebab-case) → wird `data-id` + CSS-Klasse `s-<id>` auf Server. `uniqueWidgetId()` Output direkt verwenden — macht `novamira-adrianv2/patch-element-styles` danach präziser |
+| BATCH_GET | `novamira-adrianv2/batch-get-content` ersetzt N×`elementor-get-content` Calls. Max 50 Posts, Modi: skeleton/settings/full. Fix 4 damit **obsolet** |
+| VAR_AUDIT | `novamira-adrianv2/variable-audit` scannt e-gv-* Drift Site-weit. `report: "drift"` für nur Broken References. Fix 5 damit **obsolet** |
 
 ## 12 Guards (framer-pre-build-validate)
 
@@ -333,27 +333,27 @@ GCs entstehen IMPLIZIT wenn der Tree via elementor-set-content geschrieben wird.
 1. npm run gc-generate → gc-plan.json  (suggested_classes[])
 2. V4 Tree: gc-* Style-IDs eintragen (gc-text-xl, gc-section-main, …)
 3. elementor-set-content → GCs automatisch registriert
-4. adrians-add-global-class-variant → responsive Varianten (tablet/mobile)
-5. adrians-apply-variable-to-class → Design-Token binden
-6. adrians-batch-class → GC auf N Elemente gleichzeitig anwenden
+4. novamira-adrianv2/add-global-class-variant → responsive Varianten (tablet/mobile)
+5. novamira-adrianv2/apply-variable-to-class → Design-Token binden
+6. novamira-adrianv2/batch-class → GC auf N Elemente gleichzeitig anwenden
 ```
 
-## Novamira Adrians Extra — neue Abilities (v1.0.0)
+## Novamira AdrianV2 — Abilities (v1.0.0)
 
 | Ability | Wann nutzen |
 |---------|-------------|
-| `adrians-layout-audit` | **Post-Build pflicht** — erkennt Pass-through-Container, Deep-Nesting >3, Single-Child-Wrapper, Grid-Kandidaten, Kicker-Rows. Serverseitig, kein Script nötig |
-| `adrians-html-to-elementor-widget-plan` | Framer-HTML direkt → V4 Widget-Plan analysieren. Potenzielle Alternative zu convert-xml-to-v4.js für HTML-Input (testen!) |
-| `adrians-kit-convert-v3-to-v4` | v3 Kit automatisch zu v4 migrieren: Farben → Variablen, Typo → Global Classes, Responsive Variants. 4 Phasen, 1 Call. Ersetzt manuelle Token-Extraktion bei v3-Kits |
-| `adrians-add-global-class-variant` | Responsive Breakpoint-Variant auf Global Class hinzufügen (tablet/mobile) ohne Tree-Rebuild |
-| `adrians-edit-global-class-variant` | Variant nach Index oder breakpoint+state patchen |
-| `adrians-list-class-variants` | Alle Variants einer Global Class mit Breakpoints und Props inspizieren |
-| `adrians-apply-variable-to-class` | CSS-Property in Global Class auf v4 Variable binden (`var(--e-global-color-xxx)`) |
-| `adrians-page-markdown` | Elementor-Seite als Markdown lesen (YAML frontmatter). Nützlich für Content-Audit und Diff nach Set-Content |
-| `adrians-clone-element` | Element + Subtree klonen, IDs regenerieren. Für Component-Bibliothek und Section-Wiederverwendung |
-| `adrians-reorder-element` | Element innerhalb/zwischen Parents verschieben |
-| `adrians-batch-get-content` | **Fix 4 ✓** — N Posts in einem Call holen (max 50). skeleton/settings/full |
-| `adrians-variable-audit` | **Fix 5 ✓** — e-gv-* Drift und unused Variables Site-weit finden |
+| `novamira-adrianv2/layout-audit` | **Post-Build pflicht** — erkennt Pass-through-Container, Deep-Nesting >3, Single-Child-Wrapper, Grid-Kandidaten, Kicker-Rows. Serverseitig, kein Script nötig |
+| `novamira-adrianv2/html-to-elementor-widget-plan` | Framer-HTML direkt → V4 Widget-Plan analysieren. Potenzielle Alternative zu convert-xml-to-v4.js für HTML-Input (testen!) |
+| `novamira-adrianv2/kit-convert-v3-to-v4` | v3 Kit automatisch zu v4 migrieren: Farben → Variablen, Typo → Global Classes, Responsive Variants. 4 Phasen, 1 Call. Ersetzt manuelle Token-Extraktion bei v3-Kits |
+| `novamira-adrianv2/add-global-class-variant` | Responsive Breakpoint-Variant auf Global Class hinzufügen (tablet/mobile) ohne Tree-Rebuild |
+| `novamira-adrianv2/edit-global-class-variant` | Variant nach Index oder breakpoint+state patchen |
+| `novamira-adrianv2/list-class-variants` | Alle Variants einer Global Class mit Breakpoints und Props inspizieren |
+| `novamira-adrianv2/apply-variable-to-class` | CSS-Property in Global Class auf v4 Variable binden (`var(--e-global-color-xxx)`) |
+| `novamira-adrianv2/get-page-markdown` | Elementor-Seite als Markdown lesen (YAML frontmatter). Nützlich für Content-Audit und Diff nach Set-Content |
+| `novamira-adrianv2/clone-element` | Element + Subtree klonen, IDs regenerieren. Für Component-Bibliothek und Section-Wiederverwendung |
+| `novamira-adrianv2/reorder-element` | Element innerhalb/zwischen Parents verschieben |
+| `novamira-adrianv2/batch-get-content` | **Fix 4 ✓** — N Posts in einem Call holen (max 50). skeleton/settings/full |
+| `novamira-adrianv2/variable-audit` | **Fix 5 ✓** — e-gv-* Drift und unused Variables Site-weit finden |
 
 ## Fehlertabelle
 
@@ -362,7 +362,7 @@ GCs entstehen IMPLIZIT wenn der Tree via elementor-set-content geschrieben wird.
 | `class_name_contains_spaces` | Hyphen in Style-ID | Style-ID umbenennen (kein `-`) |
 | `STYLE_CLASSES_BINDING FAIL` | Style-ID fehlt in `classes.value` | In `settings.classes.value` eintragen |
 | Bild lädt nicht | `url: null` in image-src | `url`-Key komplett entfernen |
-| Falsche Farben | GV-ID Drift nach Kit-Update | `adrians-export-design-system` → `cross-validate --design-system` |
+| Falsche Farben | GV-ID Drift nach Kit-Update | `novamira-adrianv2/export-design-system` → `cross-validate --design-system` |
 | `elementor-set-content` Timeout | Tree zu groß | `npm run dependency-graph` → sektionsweise bauen |
 | `custom_css` crasht | Plain String | `{"raw": "..."}` Format erzwingen |
 | Variables nicht angelegt | Falscher API-Parameter | `strategy: "skip"` (NICHT `conflict_resolution`) |

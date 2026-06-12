@@ -109,7 +109,7 @@ export class McpClient {
    * MCP connector. This method serves as an HTTP fallback for scripts
    * that need direct API access (e.g., pre-flight checks, schema sync).
    *
-   * @param {string} ability    Ability name (e.g. "novamira/adrians-greet").
+   * @param {string} ability    Ability name (e.g. "novamira-adrianv2/greet").
    * @param {object} [params={}] Ability parameters.
    * @param {object} [retryOpts] Per-call retry overrides.
    * @param {number} [retryOpts.maxRetries]

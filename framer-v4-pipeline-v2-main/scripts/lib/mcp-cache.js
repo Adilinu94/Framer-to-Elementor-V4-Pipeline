@@ -51,7 +51,7 @@ export class McpCache {
       return cached;
     }
     process.stderr.write('[mcp-cache] Cache-MISS — discovering...\n');
-    const abilities = await mcp.call('novamira/adrians-export-design-system', { what: 'all' });
+    const abilities = await mcp.call('novamira-adrianv2/export-design-system', { what: 'all' });
     this.set(abilities);
     return abilities;
   }

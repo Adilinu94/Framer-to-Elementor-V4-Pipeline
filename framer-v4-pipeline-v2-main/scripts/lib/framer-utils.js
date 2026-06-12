@@ -106,10 +106,13 @@ export function expectedFontFilenames(family, weight) {
 // STYLE ID GENERATION
 // ─────────────────────────────────────────────
 
-/** "Hero Section" → "shero", "Heading 1" → "sheading1" */
+// RC-18 Fix: Prefix 'fe' (Framer Export) to avoid CSS namespace collisions
+// with Elementor V4 Global Classes (gc-*). The old 's' prefix produced IDs
+// like 'snode0' that could collide with V4 internal style IDs.
+// No hyphen used — Invariant III requires style IDs without hyphens.
 export function generateStyleId(name) {
-  const clean = String(name).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 19);
-  return 's' + (clean || 'node');
+  const clean = String(name).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 17);
+  return 'fe' + (clean || 'node');
 }
 
 export function isValidStyleId(id) {
@@ -124,12 +127,14 @@ export function wrapType(type, value) {
   return { '$$type': type, value };
 }
 
-/** Returns true for numeric CSS values (1200px, 50%, 2fr) — false for keywords (fit-content, auto, max-content). Use before calling wrapSize() to avoid producing $$type:"string" for dimension properties, which Elementor's Style_Parser rejects. */
+/** Returns true for numeric CSS values (1200px, 50%) — false for keywords (fit-content, auto, max-content) and 'fr' units (only valid in grid-template-columns). Use before calling wrapSize() to avoid producing $$type:"string" for dimension properties, which Elementor's Style_Parser rejects. */
 export function isDimensionValue(val) {
   return /^-?[\d.]+(px|%|em|rem|vw|vh)?$/.test(String(val).trim());
 }
 
-/** "68px" → { $$type:"size", value:{ size:68, unit:"px" } } */
+/** "68px" → { $$type:"size", value:{ size:68, unit:"px" } }
+ * RC-10 Fix: 'fr' unit is rejected for general use. Only grid-template-columns
+ * accepts 'fr' — callers must bypass wrapSize for grid contexts. */
 export function wrapSize(valStr) {
   const m = String(valStr).match(/^(-?[\d.]+)(px|%|em|rem|vw|vh)?$/);
   if (m) return { '$$type': 'size', value: { size: parseFloat(m[1]), unit: m[2] || 'px' } };
@@ -191,7 +196,10 @@ export function wrapGvFont(gvId)  { return { '$$type': 'global-font-variable',  
 export function wrapImageSrc({ id = null, url = null } = {}) {
   const value = {};
   if (id !== null && id !== undefined) value.id = id;
-  if (url !== null && url !== undefined) value.url = typeof url === 'object' ? url : wrapType('url', String(url));
+  // The URL inside image-src.value MUST be wrapped in $$type:url.
+  // el_build_image_shape() on the server wraps url as {$$type:"url",value:"..."}
+  // and Elementor's Props_Parser deep validation rejects a bare string.
+  if (url !== null && url !== undefined) value.url = wrapType('url', String(url));
   return { '$$type': 'image-src', value };
 }
 

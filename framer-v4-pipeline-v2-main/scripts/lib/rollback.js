@@ -13,7 +13,7 @@
  *
  * Workflow:
  *   1. backupPlan(postId) → Generiert MCP-Plan für elementor-get-content
- *      + adrians-page-settings, speichert Backup lokal.
+ *      + novamira-adrianv2/page-settings, speichert Backup lokal.
  *   2. restorePlan(postId) → Generiert MCP-Plan für elementor-set-content
  *      aus dem lokalen Backup.
  *   3. discardBackup(postId) → Löscht lokales Backup.
@@ -58,7 +58,7 @@ export class RollbackManager {
    * @param {number} postId
    * @param {object} [agentResults] - Results from agent-executed MCP calls.
    * @param {object} [agentResults.getContent] - Result of novamira/elementor-get-content.
-   * @param {object} [agentResults.pageSettings] - Result of novamira/adrians-page-settings.
+   * @param {object} [agentResults.pageSettings] - Result of novamira-adrianv2/page-settings.
    * @returns {object} { plan: { mcp_calls, agent_instruction }, backup: object|null }
    */
   backupPlan(postId, agentResults = null) {
@@ -102,7 +102,7 @@ export class RollbackManager {
           description: 'Hole aktuellen Elementor-Inhalt',
         },
         {
-          ability: 'novamira/adrians-page-settings',
+          ability: 'novamira-adrianv2/page-settings',
           params: { post_id: postId },
           save_as: 'pageSettings',
           description: 'Hole Page-Settings (optional, nicht kritisch)',
@@ -113,7 +113,7 @@ Führe beide MCP-Calls aus und übergib die Ergebnisse an RollbackManager.backup
 Der agentResults-Parameter erwartet:
   {
     getContent: <ergebnis von elementor-get-content>,
-    pageSettings: <ergebnis von adrians-page-settings>
+    pageSettings: <ergebnis von novamira-adrianv2/page-settings>
   }
 `.trim(),
     };
@@ -159,7 +159,7 @@ Der agentResults-Parameter erwartet:
         // Include page settings restore if available
         ...(backup.pageSettings ? {
           page_settings_restore: {
-            ability: 'novamira/adrians-page-settings',
+            ability: 'novamira-adrianv2/page-settings',
             params: {
               post_id: postId,
               settings: backup.pageSettings,
