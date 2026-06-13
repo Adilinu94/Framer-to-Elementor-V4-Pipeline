@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { createHash } from 'node:crypto';
+import { structuralHash } from './lib/framer-utils.js';
 
 const { values: args } = parseArgs({
   options: {
@@ -93,18 +93,6 @@ const log = (...m) => { if (args.verbose) process.stderr.write('[comp-extract] '
 
 // ─── V4 Tree Mode ───────────────────────────────────────────────────────────
 
-function structuralHash(elements) {
-  if (!Array.isArray(elements)) return '';
-  const parts = elements.map(el => {
-    const wt = el.widgetType || el.type || 'unknown';
-    const kids = (el.elements || el.children || []).length;
-    const styleKeys = Object.keys(el.styles || {}).sort().join(',');
-    const tag = el.settings?.tag || '';
-    return `${wt}|${kids}|${styleKeys}|${tag}`;
-  });
-  return createHash('md5').update(parts.join('::')).digest('hex').slice(0, 12);
-}
-
 function extractComponentsFromV4Tree(tree) {
   const roots = Array.isArray(tree) ? tree : [tree];
   const containerGroups = new Map(); // structuralHash → [elements]
@@ -112,7 +100,7 @@ function extractComponentsFromV4Tree(tree) {
   function walk(node) {
     const children = node.elements || node.children || [];
     if (children.length >= 2) {
-      const hash = structuralHash(children);
+      const hash = structuralHash(children, { includeTag: true });
       if (!containerGroups.has(hash)) {
         containerGroups.set(hash, { template: children, occurrences: [] });
       }

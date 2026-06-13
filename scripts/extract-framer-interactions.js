@@ -245,7 +245,86 @@ if (args.html) {
 }
 
 if (args['v4-tree']) {
-  log('V4 tree mode not yet implemented');
+  if (!fs.existsSync(args['v4-tree'])) {
+    process.stderr.write(`Error: v4-tree not found: ${args['v4-tree']}\n`);
+    process.exit(2);
+  }
+  const tree = JSON.parse(fs.readFileSync(args['v4-tree'], 'utf8'));
+  const roots = Array.isArray(tree) ? tree : [tree];
+  const extractedInteractions = [];
+  const seen = new Set();
+
+  function walkV4Tree(node, depth) {
+    const elementId = node.id || `el-${depth}`;
+    const styles = node.styles || {};
+
+    for (const [styleId, styleDef] of Object.entries(styles)) {
+      if (styleId.startsWith('gc-')) continue;
+      const variants = styleDef.variants || [];
+      for (const variant of variants) {
+        const props = variant.props || {};
+        const bp = (variant.meta && variant.meta.breakpoint) || '';
+        if (bp && bp !== 'desktop') continue;
+
+        const opacityVal = typeof props.opacity?.value === 'number'
+          ? props.opacity.value
+          : typeof props.opacity === 'number' ? props.opacity : null;
+
+        if (opacityVal !== null && opacityVal < 1) {
+          const dedupKey = `${elementId}::entrance`;
+          if (!seen.has(dedupKey)) {
+            seen.add(dedupKey);
+            extractedInteractions.push({
+              selector: `#${elementId}`,
+              elementId,
+              v4_interaction: {
+                type: 'entrance',
+                trigger: 'page_load',
+                effects: [{
+                  type: 'transform',
+                  opacity: { from: 0, to: 1 },
+                  easing: 'ease-out',
+                  duration: 600,
+                }],
+              },
+              source: `v4-tree:${elementId}:opacity:${opacityVal}`,
+            });
+          }
+        }
+
+        const hasTransform = props.transform?.value;
+        if (hasTransform) {
+          const dedupKey = `${elementId}::scroll`;
+          if (!seen.has(dedupKey)) {
+            seen.add(dedupKey);
+            extractedInteractions.push({
+              selector: `#${elementId}`,
+              elementId,
+              v4_interaction: {
+                type: 'scroll',
+                trigger: 'scroll_into_view',
+                effects: [{
+                  type: 'transform',
+                  translateY: { from: 30, to: 0, unit: 'px' },
+                  opacity: { from: 0, to: 1 },
+                  easing: 'ease-out',
+                  duration: 600,
+                }],
+              },
+              source: `v4-tree:${elementId}:transform`,
+            });
+          }
+        }
+      }
+    }
+
+    const children = node.elements || node.children || [];
+    for (const child of children) walkV4Tree(child, depth + 1);
+  }
+
+  for (const root of roots) walkV4Tree(root, 0);
+  interactions.push(...extractedInteractions);
+  log(`V4 tree mode: ${extractedInteractions.length} interactions extracted`);
 }
 
 // ─── OUTPUT ─────────────────────────────────────────────────────────────────

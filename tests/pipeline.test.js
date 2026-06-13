@@ -1240,3 +1240,126 @@ describe('validate-v4-tree: DOM depth check (C7)', () => {
       `DOM-DEPTH message should mention depth 6, got: ${domDepthIssues[0].message}`);
   });
 });
+
+// ─── Suite 22: C3 Native Routing (ENH-7) ──────────────────────────────────
+
+describe('C3: Native Routing (ENH-7)', () => {
+  test('C3: --native flag produces v4-native interactions without GSAP code', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      .card { transition: opacity 0.3s ease-out; }
+    </style></head><body><div class="card"></div></body></html>`;
+    const htmlFile = tmpFile('c3-native.html', html);
+    const outFile = tmpFile('c3-native-plan.json');
+    run('framer-animation-extractor.js', ['--html', htmlFile, '--native', '--output', outFile]);
+    const plan = readJson(outFile);
+    const v4Native = plan.snippets.filter(s => s.type === 'v4-native');
+    assert.ok(v4Native.length > 0, 'Should have v4-native snippet');
+    assert.strictEqual(v4Native[0].code, undefined, 'No GSAP code in native mode');
+    assert.ok(v4Native[0].interactions.length > 0, 'Has interactions array');
+    assert.ok(v4Native[0].mcpRouting, 'Has mcpRouting section');
+  });
+
+  test('C3: without --native flag → legacy GSAP output preserved', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      .card { transition: opacity 0.3s ease-out; }
+    </style></head><body><div class="card"></div></body></html>`;
+    const htmlFile = tmpFile('c3-legacy.html', html);
+    const outFile = tmpFile('c3-legacy-plan.json');
+    run('framer-animation-extractor.js', ['--html', htmlFile, '--output', outFile]);
+    const plan = readJson(outFile);
+    const gsapSnippets = plan.snippets.filter(s => s.type === 'gsap');
+    assert.ok(gsapSnippets.length > 0, 'Should have GSAP snippet in legacy mode');
+  });
+});
+
+// ─── Suite 23: structuralHash Deduplication (ENH-8) ────────────────────────
+
+describe('structuralHash Deduplication (ENH-8)', () => {
+  test('ENH-8: A1 still detects repeated components with shared structuralHash', () => {
+    const card1 = {
+      id: 'card1', widgetType: 'e-flexbox',
+      settings: { classes: { '$$type': 'classes', value: ['sc'] }, tag: 'article' },
+      styles: { sc: { variants: [{ meta: { breakpoint: null, state: null }, props: {} }] } },
+      elements: [
+        { id: 'h1', widgetType: 'e-heading', styles: {}, settings: {}, elements: [] },
+        { id: 'p1', widgetType: 'e-paragraph', styles: {}, settings: {}, elements: [] },
+      ],
+    };
+    const card2 = JSON.parse(JSON.stringify(card1));
+    card2.id = 'card2';
+
+    const tree = {
+      id: 'section', widgetType: 'e-flexbox', styles: {}, settings: {},
+      elements: [card1, card2],
+    };
+
+    const treeFile = tmpFile('enh8-tree.json', tree);
+    const outDir = join(tmpdir(), 'pipeline-test', 'enh8-' + Date.now());
+    run('extract-framer-components.js', ['--v4-tree', treeFile, '--output', outDir]);
+
+    const plan = readJson(join(outDir, 'components-plan.json'));
+    assert.ok(plan.meta.totalComponents >= 1,
+      `Should detect repeating card pattern, got ${plan.meta.totalComponents}`);
+  });
+
+  test('ENH-8: D1 still detects component reuse with shared structuralHash', () => {
+    const card1 = {
+      id: 'card1', widgetType: 'e-flexbox',
+      settings: { classes: { '$$type': 'classes', value: ['sc'] } },
+      styles: { sc: { variants: [{ meta: { breakpoint: null, state: null }, props: {} }] } },
+      elements: [
+        { id: 'h1', widgetType: 'e-heading', styles: {}, settings: {}, elements: [] },
+        { id: 'p1', widgetType: 'e-paragraph', styles: {}, settings: {}, elements: [] },
+      ],
+    };
+    const card2 = JSON.parse(JSON.stringify(card1));
+    card2.id = 'card2';
+    card2.elements[0].id = 'h2';
+    card2.elements[1].id = 'p2';
+
+    const tree = [{
+      id: 'section', widgetType: 'e-flexbox', styles: {}, settings: {},
+      elements: [card1, card2],
+    }];
+
+    const treeFile = tmpFile('enh8-d1-tree.json', tree);
+    const result = run('validate-v4-tree.js', [treeFile, '--mode=warn']);
+    const parsed = JSON.parse(result.stdout);
+    const reuseWarnings = (parsed.warnings || []).filter(w => w.rule === 'COMPONENT_REUSE_POTENTIAL');
+    assert.ok(reuseWarnings.length > 0,
+      'Should detect component reuse with shared structuralHash');
+  });
+});
+
+// ─── Suite 24: A2 v4-tree Mode (ENH-9) ────────────────────────────────────
+
+describe('A2: v4-tree Mode (ENH-9)', () => {
+  test('ENH-9: --v4-tree extracts interactions from opacity styles', () => {
+    const tree = [{
+      id: 'hero', widgetType: 'e-flexbox',
+      styles: {
+        s1: { variants: [{ meta: { breakpoint: null, state: null }, props: { opacity: 0.5 } }] },
+      },
+      elements: [],
+    }];
+    const treeFile = tmpFile('enh9-tree.json', tree);
+    const outFile = tmpFile('enh9-plan.json');
+    run('extract-framer-interactions.js', ['--v4-tree', treeFile, '--output', outFile]);
+    const plan = readJson(outFile);
+    assert.ok(plan.interactions.length > 0, 'Should extract interaction from opacity style');
+    assert.strictEqual(plan.interactions[0].v4_interaction.type, 'entrance');
+  });
+
+  test('ENH-9: --v4-tree returns empty for tree without animations', () => {
+    const tree = [{
+      id: 'static', widgetType: 'e-flexbox',
+      styles: {},
+      elements: [],
+    }];
+    const treeFile = tmpFile('enh9-static.json', tree);
+    const outFile = tmpFile('enh9-static-plan.json');
+    run('extract-framer-interactions.js', ['--v4-tree', treeFile, '--output', outFile]);
+    const plan = readJson(outFile);
+    assert.strictEqual(plan.interactions.length, 0);
+  });
+});

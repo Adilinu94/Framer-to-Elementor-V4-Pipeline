@@ -25,6 +25,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { structuralHash } from './lib/framer-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -602,21 +603,10 @@ function checkGridVsFlexboxCoverage(el, path, errors, warnings) {
 function checkComponentReusePotential(tree, errors, warnings) {
   const containerMap = new Map();
 
-  function structuralHash(children) {
-    if (!Array.isArray(children) || children.length < 2) return null;
-    const parts = children.map(el => {
-      const wt = el.widgetType || el.elType || 'unknown';
-      const kids = (el.elements || el.children || []).length;
-      const styleKeys = Object.keys(el.styles || {}).sort().join(',');
-      return `${wt}|${kids}|${styleKeys}`;
-    });
-    return parts.join('::');
-  }
-
   function walkForComponents(node, pathStr) {
     const children = node.elements || node.children || [];
     if (children.length >= 2) {
-      const hash = structuralHash(children);
+      const hash = structuralHash(children, { nullOnSmall: true });
       if (hash) {
         if (!containerMap.has(hash)) {
           containerMap.set(hash, { example: children, parents: [] });
