@@ -22,12 +22,69 @@ const { values: args } = parseArgs({
     output:   { type: 'string' },
     'post-id':{ type: 'string' },
     verbose:  { type: 'boolean', default: false },
+    help:     { type: 'boolean', default: false },
   },
   strict: false,
 });
 
-if (!args.html && !args['v4-tree']) {
-  process.stderr.write('Error: --html <framer-export> oder --v4-tree <tree.json> required\n');
+if (args.help || (!args.html && !args['v4-tree'])) {
+  console.log(`
+
+extract-framer-interactions.js  —  A2: Interaction Extraction (Sprint 2)
+
+ZWECK:
+  Extrahiert Framer Scroll/Trigger-Animationen aus HTML und mapped
+  sie auf V4 Pro Interactions (native JSON, KEIN GSAP). Erkennt:
+    • CSS transition/transform Regeln → V4 entrance/scroll effects
+    • data-framer-appear-id Attribute → Scroll-into-View Animationen
+    • Easing-Werte werden auf Elementor-native Namen gemappt (C3 Fix)
+
+EINGABE (mindestens eine):
+  --html FILE           Framer HTML Export
+  --v4-tree FILE        V4 Widget-Tree JSON (v4-tree mode, WIP)
+
+OPTIONEN:
+  --output FILE         Output-Pfad (interactions-plan.json)  [default: stdout]
+  --post-id ID          WordPress Post-ID (fuer MCP-Routing)
+  --verbose             Ausfuehrliche Logs
+  --help                Diese Hilfe
+
+BEISPIELE:
+  # Aus Framer HTML-Export:
+  node scripts/extract-framer-interactions.js \\
+    --html FramerExport/index.html \\
+    --output interactions-plan.json
+
+  # Mit Post-ID fuer direktes MCP-Routing:
+  node scripts/extract-framer-interactions.js \\
+    --html FramerExport/index.html \\
+    --post-id 123 \\
+    --output interactions-plan.json
+
+  # Stdout (kein --output):
+  node scripts/extract-framer-interactions.js --html index.html
+
+OUTPUT:
+  interactions-plan.json  — Meta, interactions[], MCP-Routing
+
+V4 INTERACTION FORMAT:
+  { selector, v4_interaction: { type, trigger, effects[],
+    easing (Elementor-native), duration (ms), delay (ms) } }
+
+EASING-MAP (C3 Fix):
+  power2.out → ease-out | power2.in → ease-in |
+  ease → ease | ease-in-out → ease-in-out | linear → linear
+
+MCP-ROUTING:
+  ability: novamira-adrianv2/edit-interaction
+  (Existiert bereits — kein neues PHP noetig)
+
+EXIT-CODES:
+  0 = Interactions extrahiert
+  1 = Keine Interactions gefunden
+  2 = Eingabedatei nicht gefunden / kein Input-Flag
+`);
+  if (args.help) process.exit(0);
   process.exit(2);
 }
 

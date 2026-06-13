@@ -21,12 +21,62 @@ const { values: args } = parseArgs({
     xml:      { type: 'string' },
     output:   { type: 'string' },
     verbose:  { type: 'boolean', default: false },
+    help:     { type: 'boolean', default: false },
   },
   strict: false,
 });
 
-if (!args.html && !args.xml) {
-  process.stderr.write('Error: --html <framer-export> oder --xml <file> required\n');
+if (args.help || (!args.html && !args.xml)) {
+  console.log(`
+
+extract-framer-forms.js  —  A3: Form Extraction (Sprint 3)
+
+ZWECK:
+  Erkennt Framer Formulare in HTML-Exports und generiert
+  V4 Atomic Form Strukturen. Erkennt:
+    • <form> Elemente mit Input-Feldern und Submit-Buttons
+    • Standalone Input-Gruppen (≥2 Inputs ohne <form> Tag)
+    • Labels (via <label> oder placeholder)
+    • Pflichtfelder (required Attribut)
+    • Submit-Text (Button oder Input[type=submit])
+
+EINGABE (mindestens eine):
+  --html FILE           Framer HTML Export
+  --xml FILE            Alternative XML/HTML-Datei
+
+OPTIONEN:
+  --output FILE         Output-Pfad (form-plan.json)       [default: stdout]
+  --verbose             Ausfuehrliche Logs
+  --help                Diese Hilfe
+
+BEISPIELE:
+  # Aus Framer HTML-Export:
+  node scripts/extract-framer-forms.js \\
+    --html FramerExport/index.html \\
+    --output form-plan.json
+
+  # Stdout (kein --output):
+  node scripts/extract-framer-forms.js --html index.html
+
+OUTPUT:
+  form-plan.json  — Meta, forms[] mit v4_tree, MCP-Routing
+
+V4 ATOMIC FORM WIDGETS:
+  e-field-label   — Label-Text pro Feld
+  e-field-input   — Input-Feld (type: text|email, placeholder, required)
+  e-field-submit  — Submit-Button mit konfigurierbarem Text
+
+MCP-ROUTING:
+  ability: novamira-adrianv2/create-atomic-form
+  (B4: EINZIGE neue Ability im Sprint-Plan — muss im Plugin
+   implementiert werden)
+
+EXIT-CODES:
+  0 = Forms erkannt und V4 Trees generiert
+  1 = Keine Formulare gefunden
+  2 = Eingabedatei nicht gefunden / kein Input-Flag
+`);
+  if (args.help) process.exit(0);
   process.exit(2);
 }
 

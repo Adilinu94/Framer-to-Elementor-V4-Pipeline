@@ -26,16 +26,68 @@ const { values: args } = parseArgs({
     output:   { type: 'string' },
     'min-dups':{ type: 'string', default: '2' },
     verbose:  { type: 'boolean', default: false },
+    help:     { type: 'boolean', default: false },
   },
   strict: false,
 });
 
-const MIN_DUPS = parseInt(args['min-dups'] || '2', 10);
+if (args.help || (!args.xml && !args['v4-tree'])) {
+  console.log(`
 
-if (!args.xml && !args['v4-tree']) {
-  process.stderr.write('Error: --xml <framer-export> oder --v4-tree <tree.json> required\n');
+extract-framer-components.js  —  A1: Component Extraction (Sprint 2)
+
+ZWECK:
+  Analysiert Framer HTML/XML auf wiederholte Container-Muster und
+  extrahiert sie als V4 Atomic Component Blueprints. Erkennt:
+    • Wiederholte CSS-Selektoren (data-framer-name Pattern)
+    • Strukturell identische Kind-Gruppen im V4 Tree (structuralHash)
+    • Properties: Titel, Paragraph, Bild, Button/Link
+
+EINGABE (mindestens eine):
+  --xml FILE            Framer HTML/CSS Export
+  --v4-tree FILE        V4 Widget-Tree JSON (von convert-xml-to-v4.js)
+
+OPTIONEN:
+  --output DIR          Output-Verzeichnis (eine JSON pro Component +
+                        components-plan.json)                [default: .]
+  --min-dups N          Mindest-Wiederholungen fuer Component [default: 2]
+  --verbose             Ausfuehrliche Logs
+  --help                Diese Hilfe
+
+BEISPIELE:
+  # Aus Framer HTML-Export:
+  node scripts/extract-framer-components.js \\
+    --xml FramerExport/index.html \\
+    --output components/
+
+  # Aus V4 Tree (Pipeline Stage):
+  node scripts/extract-framer-components.js \\
+    --v4-tree v4-tree.json \\
+    --output components/ \\
+    --min-dups 3
+
+  # Stdout (kein --output):
+  node scripts/extract-framer-components.js --xml index.html
+
+OUTPUT:
+  components-plan.json  — Meta, alle Components, MCP-Routing
+  <ComponentName>.json  — Einzelner Component Blueprint
+
+MCP-ROUTING:
+  create: novamira-adrianv2/create-component
+  assign: novamira-adrianv2/insert-component
+  (Beide existieren bereits — kein neues PHP noetig)
+
+EXIT-CODES:
+  0 = Components extrahiert
+  1 = Keine wiederholten Muster gefunden
+  2 = Eingabedatei nicht gefunden / kein Input-Flag
+`);
+  if (args.help) process.exit(0);
   process.exit(2);
 }
+
+const MIN_DUPS = parseInt(args['min-dups'] || '2', 10);
 
 const log = (...m) => { if (args.verbose) process.stderr.write('[comp-extract] ' + m.join(' ') + '\n'); };
 
