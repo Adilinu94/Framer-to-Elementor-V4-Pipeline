@@ -1,6 +1,6 @@
 # 🚀 Framer → Elementor V4 Pipeline V2: Master Blueprint
 
-> **Version:** v0.7.0 | **Stand:** 2026-06-12
+> **Version:** v0.10.0 | **Stand:** 2026-06-13
 
 ## 🎯 Overview
 Ziel: Umsetzung eines stabilen, token-effizienten Framer-zu-V4-Workflows basierend auf einer **3-Wege-Symbiose**:
@@ -37,6 +37,9 @@ framer-v4-pipeline-v2/
     │   └── split-large-tree.js            # MCP-Plan-Generator: Section-Split großer Trees
     ├── convert-xml-to-v4.js              # Framer XML -> V4 Widget-Tree JSON
     ├── extract-framer-styles.js          # CSS-Properties + Variablen aus HTML-Export
+    ├── extract-framer-components.js      # A1: Component Extraction (wiederholte Muster)
+    ├── extract-framer-interactions.js    # A2: Interaction Extraction (CSS → V4 Pro)
+    ├── extract-framer-forms.js           # A3: Form Extraction (→ V4 Atomic Forms)
     ├── extract-image-urls.js             # Bild-URLs aus HTML-Export
     ├── extract-responsive-breakpoints.js # Breakpoints aus CSS
     ├── resolve-fonts.js                  # Font-Referenzen aufloesen (FR;/GF; Prefix)
@@ -115,20 +118,25 @@ framer-v4-pipeline-v2/
 - [x] `post-build-auto-fix.js`: QA-Report → Auto-Fix MCP-Plan (contrast, alt-text, SEO, layout)
 - [x] `inject-animation-code.js`: Animation-Plan → MCP-Code-Injection (GSAP/CSS/JS)
 - [x] `section-compare.js`: Zombie-Browser-Fix (Bug 1) + Scroll-X-Fix (Bug 2)
-- [x] `framer-utils.js`: wrapSize, wrapDimensions, generateStyleId, walkTree, getWrappedSizeNumber, scaleWrappedSize
-- [x] `convert-xml-to-v4.js`: Framer XML -> V4 Tree, korrektes image-src url-Format
+- [x] `framer-utils.js`: wrapSize, wrapDimensions, generateStyleId, walkTree, getWrappedSizeNumber, scaleWrappedSize, **structuralHash**
+- [x] `convert-xml-to-v4.js`: Framer XML -> V4 Tree, C2 Grid Detection, C6 GV-Substitution, C1 Component Preservation
 - [x] `design-token-extractor.js`: CSS Custom Properties -> token-mapping + variables-plan
-- [x] `generate-global-classes.js`: Duplikat-Erkennung, GC-Vorschlaege, --execute (Fix E)
-- [x] `auto-scale-responsive.js`: V4 $$type-bewusstes Scaling, --tree/--output Flags
+- [x] `generate-global-classes.js`: Duplikat-Erkennung, C4 Semantic GC Naming, --execute (Fix E)
+- [x] `auto-scale-responsive.js`: V4 $$type-bewusstes Scaling, C5 Breakpoint-aware, --tree/--output Flags
 - [x] `framer-pre-build-validate.js`: 12 Guards, Score >= 85%, g12 seenPaths-Dedup, walk styles+settings
 - [x] `patch-v4-tree-media-ids.js`: Invariant IV compliant (image-attachment-id Wrapper, kein url:null)
 - [x] `verify-build-binding.js`: Invariant I, gc- Filter (kein false positive bei Global Classes)
-- [x] `validate-v4-tree.js`: Vollstaendiger Schema-Validator (Invariant I-V, widgetType-Kongruenz)
+- [x] `validate-v4-tree.js`: Vollstaendiger Schema-Validator, D1/D2/D3 Checks, --animation-plan Flag
 - [x] `cross-validate-sources.js`, `asset-to-wp-media.js` (inkl. --execute Fix B), `build-dependency-graph.js`, `export-mcp-xml.js`
 - [x] `schemas/v4-prop-type-schema.json` → via V2-Plugin REST-Endpoint + lokales Fixture für Tests
-- [x] `tests/pipeline.test.js`: 44 Tests in 9 Suites (node --test), alle gruen
+- [x] **`extract-framer-components.js`** (A1): Component Extraction — wiederholte Muster → Blueprints
+- [x] **`extract-framer-interactions.js`** (A2): CSS Transitions + Framer Appear → V4 Pro Interactions
+- [x] **`extract-framer-forms.js`** (A3): `<form>`/`<input>`/`<button>` → V4 Atomic Forms
+- [x] `tests/pipeline.test.js`: **77 Tests in 24 Suiten** (node --test), alle gruen
 - [x] `tests/e2e.test.js`: 12 Tests, alle gruen
 - [x] `tests/integration.test.js`: 4 Tests, alle gruen
+- [x] GSD-Projekt: `.planning/` mit PROJECT.md, REQUIREMENTS.md, ROADMAP.md, PLAN-1-4.md, STATE.md, config.json
+- [x] `--help` Blocks: A1, A2, A3 mit einheitlichem CLI-Pattern (parseArgs help Option)
 
 ### Phase 0.5.x Security & QA (abgeschlossen)
 - [x] **0.5.3:** PHP-Sandbox-Security-Audit — B8-CRITICAL Bug in `is_available()` gefixt, Permission-Callbacks entkoppelt
@@ -191,7 +199,7 @@ framer-v4-pipeline-v2/
 | IV | Image-Src url-Key | Wenn `id` gesetzt ist, darf `url`-Key nicht existieren (nicht mal als `null`) |
 | V | custom_css Format | `custom_css` immer `{"raw":"..."}` - nie plain String (crasht die Site) |
 
-**wizard.js Phase-Übersicht (v0.7.0):**
+**wizard.js Phase-Übersicht (v0.10.0):**
 | Phase | Beschreibung | Fail-Fast |
 |-------|-------------|-----------|
 | 0 | MCP Connector Check | ✅ |
@@ -210,15 +218,21 @@ framer-v4-pipeline-v2/
 ## ✅ Lokale Verifikation
 
 ```bash
-npm test               # 44 pipeline tests
-npm run test:e2e       # 12 e2e tests
-npm run test:all       # 56 tests total
+npm test                # 77 pipeline tests (24 Suiten)
+npm run test:e2e        # 12 e2e tests
+npm run test:all        # 93 tests total (77 pipeline + 12 e2e + 4 integration)
 npm run test:integration # 4 integration tests
-npm run test:bridge    # mcp-bridge.js --self-test
-npm run test:mcp-mock  # Integration tests gegen Mock-Server
-npm run test:schema    # sync-schema.js --validate
-npm run parallel       # 5 Pre-Build Steps parallel
-npm run lint:version   # CHANGELOG.md vs package.json
+npm run test:bridge     # mcp-bridge.js --self-test
+npm run test:mcp-mock   # Integration tests gegen Mock-Server
+npm run test:schema     # sync-schema.js --validate
+npm run parallel        # 5 Pre-Build Steps parallel
+npm run lint:version    # CHANGELOG.md vs package.json
+npm run check-v4-auto   # check-v4-requirements.js --auto-call
+npm run gc-execute      # generate-global-classes.js --execute
+npm run post-build-qa   # run-post-build-qa.js
+npm run extract-components  # A1: Component Extraction
+npm run extract-interactions # A2: Interaction Extraction
+npm run extract-forms   # A3: Form Extraction
 node --check wizard.js
 node --check scripts/lib/mcp-bridge.js
 ```

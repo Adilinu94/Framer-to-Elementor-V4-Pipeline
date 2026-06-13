@@ -1,5 +1,45 @@
 # Changelog — framer-v4-pipeline-v2
 
+## [v0.10.0] — 2026-06-13
+
+### Sprint 1 — Quick Wins + Root-Cause Fix (57→61 Tests)
+
+- **C2 Strict Grid Mapping**: `display:grid`/`grid-template-columns` → `e-div-block` in `convert-xml-to-v4.js`
+- **C4 Semantic GC Naming**: `suggestNameSemantic()` mit BEM-Pattern + Token-Awareness in `generate-global-classes.js`
+- **C5 Breakpoint-aware Scaling**: `--breakpoints` Flag + `getElementScaleFactors()` aus `breakpoints.json`
+- **C6 Token-to-GV Substitution**: `substituteTokensWithGvIds()` Pass — Root-Cause Fix für #111111×45 Problem
+- **D3 GRID_VS_FLEXBOX_COVERAGE**: `checkGridVsFlexboxCoverage()` in `validate-v4-tree.js`
+
+### Sprint 2 — Components & Interactions (61→67 Tests)
+
+- **A1 `extract-framer-components.js`** (NEU): Wiederholte Card-Muster → V4 Component Blueprints
+- **A2 `extract-framer-interactions.js`** (NEU): CSS Transitions + Framer Appear → V4 Pro Interactions
+- **C1 Component Preservation**: `componentId`/`componentName` → `e-component` Widget in `convert-xml-to-v4.js`
+- **C3 Easing Fix**: `mapEasingToGSAP` → Elementor-native easing names in `framer-animation-extractor.js`
+- **D1 COMPONENT_REUSE_POTENTIAL**: `checkComponentReusePotential()` in `validate-v4-tree.js`
+
+### Sprint 3 — Forms & Validation (67→71 Tests)
+
+- **A3 `extract-framer-forms.js`** (NEU): `<form>`/`<input>`/`<button>` → V4 Atomic Forms
+- **B4 `create-atomic-form`**: MCP-Routing-Doku + npm-Script
+- **D2 NATIVE_INTERACTION_COVERAGE**: `--animation-plan` Flag + `checkNativeInteractionCoverage()`
+
+### Sprint 4 — Code-Review Remediation (71→77 Tests)
+
+- **C3 Native Routing Complete**: `--native` Flag → `type:'v4-native'` output, `mapEasingToElementor`, dual-mode `buildTransitionInteractions()`
+- **structuralHash Dedup**: Einmalig in `framer-utils.js` (mit `includeTag`/`nullOnSmall` Optionen), A1+D1 importieren
+- **A2 v4-tree Mode**: Tree-Walker erkennt opacity/transform Styles → V4-native interactions
+- **Regex-Fix**: `extractAnimatedRules` erkennt `transition:` shorthand korrekt
+
+### DX — `--help` Blocks & CLI Vereinheitlichung
+
+- A1, A2, A3: Vollständige `--help` Blöcke (ZVECK, OPTIONEN, BEISPIELE, EXIT-CODES)
+- Einheitliches CLI-Pattern: `parseArgs` mit `help` Option + `args.help || !requiredArgs` Check
+
+### Test-Status
+- `npm test` → 77/77 ✅ (von 49 → 77, +28 Tests über 4 Sprints)
+- 24 Test-Suiten, 17 Requirements, 100% Complete
+
 ## [v0.7.0] — 2026-06-12
 
 ### Added
