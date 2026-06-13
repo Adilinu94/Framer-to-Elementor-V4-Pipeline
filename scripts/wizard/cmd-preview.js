@@ -10,6 +10,30 @@ import { pathToFileURL } from 'url';
 import { log, pipelineDir } from './shared.js';
 
 /**
+ * Gibt die Hilfe fuer dieses Subcommand aus.
+ */
+export function printHelp() {
+  console.log(`wizard.js preview — Preview-Page erstellen
+
+USAGE:
+  node wizard.js preview --post-id <ID>
+
+OPTIONS:
+  --post-id <ID>   Quell-Post-ID (numerisch, Pflicht)
+
+BESCHREIBUNG:
+  Erstellt eine Draft-Preview-Page von einer bestehenden Elementor-
+  Seite. Kopiert Content + Page-Settings und gibt die Preview-URL aus.
+
+  Nach der Vorschau kann die Preview mit "promote" auf die Live-Seite
+  uebernommen werden.
+
+BEISPIEL:
+  node wizard.js preview --post-id 42
+`);
+}
+
+/**
  * Erstellt eine Preview-Page von einer bestehenden Elementor-Seite.
  *
  * @param {string|null} postId - Quell-Post-ID

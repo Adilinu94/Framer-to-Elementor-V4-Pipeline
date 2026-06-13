@@ -1495,6 +1495,111 @@ describe('Sprint 6: wizard.js modular structure', () => {
   });
 });
 
+// ─── Suite 31: FIX-10 ── format markdown in dark-mode-extractor.js ──────
+
+describe('S31: FIX-10 --format markdown', () => {
+  test('FIX-10: --format markdown produces markdown table', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      @media (prefers-color-scheme: dark) {
+        body { background: #1a1a2e; color: #e0e0e0; }
+      }
+    </style></head><body></body></html>`;
+    const htmlFile = tmpFile('fmt-md-in.html', html);
+    const outFile = tmpFile('fmt-md-out.md');
+    run('extract-framer-dark-mode.js', ['--html', htmlFile, '--format', 'markdown', '--output', outFile]);
+    const content = readFileSync(outFile, 'utf8');
+    assert.ok(content.includes('| token_name | selector | property |'),
+      'Contains markdown table header');
+    assert.ok(content.includes('# Dark Mode Variables'),
+      'Contains markdown heading');
+    assert.ok(content.includes('dark-surface-body-background') || content.includes('dark-surface-body'),
+      'Contains token names in markdown');
+  });
+
+  test('FIX-10: --format json is default (no format flag)', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      @media (prefers-color-scheme: dark) { body { background: #111; } }
+    </style></head><body></body></html>`;
+    const htmlFile = tmpFile('fmt-json-in.html', html);
+    const outFile = tmpFile('fmt-json-out.json');
+    run('extract-framer-dark-mode.js', ['--html', htmlFile, '--output', outFile]);
+    const result = readJson(outFile);
+    assert.ok(result.variables, 'JSON output has variables array');
+    assert.ok(Array.isArray(result.variables));
+    assert.strictEqual(result.variables.length, 1);
+  });
+});
+
+// ─── Suite 32: FIX-11 ── Wizard sub-commands --help ────────────────────
+
+describe('S32: FIX-11 -- Wizard sub-commands --help', () => {
+  const subcommands = ['preflight', 'dry-run', 'preview', 'promote', 'serve', 'batch'];
+
+  for (const sub of subcommands) {
+    test(`FIX-11: wizard.js ${sub} --help produces output`, () => {
+      const result = runFromRoot('wizard.js', [sub, '--help']);
+      assert.ok(result.ok, `${sub} --help should exit 0`);
+      assert.ok(result.stdout.length > 40,
+        `${sub} --help should have substantial output, got ${result.stdout.length} chars`);
+    });
+  }
+
+  test('FIX-11: wizard.js help batch shows specific help', () => {
+    const result = runFromRoot('wizard.js', ['help', 'batch']);
+    assert.ok(result.stdout.includes('batch'),
+      'help batch should mention batch');
+    assert.ok(result.stdout.includes('--pages'),
+      'help batch should mention --pages flag');
+  });
+
+  test('FIX-11: wizard.js help preflight shows 8 checks', () => {
+    const result = runFromRoot('wizard.js', ['help', 'preflight']);
+    assert.ok(result.stdout.includes('8 System-Checks') || result.stdout.includes('8 Checks'),
+      'help preflight should mention 8 checks');
+  });
+});
+
+// ─── Suite 33: FIX-12 ── token_name uniqueness ─────────────────────────
+
+describe('S33: FIX-12 -- token_name uniqueness', () => {
+  test('FIX-12: different properties get different token_names', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      @media (prefers-color-scheme: dark) {
+        body { background: #1a1a2e; color: #e0e0e0; }
+      }
+    </style></head><body></body></html>`;
+    const htmlFile = tmpFile('s33-uniq.html', html);
+    const outFile = tmpFile('s33-uniq-out.json');
+    run('extract-framer-dark-mode.js', ['--html', htmlFile, '--output', outFile]);
+    const result = readJson(outFile);
+
+    const bg = result.variables.find(v => v.property.includes('background'));
+    const text = result.variables.find(v => v.property === 'color');
+
+    assert.ok(bg, 'Has background variable');
+    assert.ok(text, 'Has text color variable');
+    assert.notStrictEqual(bg.token_name, text.token_name,
+      `Token names must differ: "${bg.token_name}" vs "${text.token_name}"`);
+  });
+
+  test('FIX-12: token_name includes property suffix', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      @media (prefers-color-scheme: dark) {
+        .card { background-color: #16213e; }
+      }
+    </style></head><body></body></html>`;
+    const htmlFile = tmpFile('s33-suffix.html', html);
+    const outFile = tmpFile('s33-suffix-out.json');
+    run('extract-framer-dark-mode.js', ['--html', htmlFile, '--output', outFile]);
+    const result = readJson(outFile);
+
+    assert.ok(result.variables.length > 0, 'Has at least one variable');
+    const v = result.variables[0];
+    assert.ok(v.token_name.includes('background-color') || v.token_name.toLowerCase().includes('backgroundcolor'),
+      `Token name "${v.token_name}" should include property name`);
+  });
+});
+
 // ── Helper: run script relative to project root (for wizard.js) ───────────
 
 const PROJECT_ROOT = dirname(SCRIPTS);

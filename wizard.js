@@ -40,12 +40,21 @@ import {
 } from './scripts/wizard/shared.js';
 
 // ── Sub-command imports (Sprint 6: each in its own module) ──
-import { runPreflight } from './scripts/wizard/cmd-preflight.js';
-import { runDryRun }   from './scripts/wizard/cmd-dry-run.js';
-import { runPreview }  from './scripts/wizard/cmd-preview.js';
-import { runPromote }  from './scripts/wizard/cmd-promote.js';
-import { runBatch }    from './scripts/wizard/cmd-batch.js';
-import { runServe }    from './scripts/wizard/cmd-serve.js';
+import { runPreflight, printHelp as phPreflight } from './scripts/wizard/cmd-preflight.js';
+import { runDryRun,   printHelp as phDryRun }   from './scripts/wizard/cmd-dry-run.js';
+import { runPreview,  printHelp as phPreview }  from './scripts/wizard/cmd-preview.js';
+import { runPromote,  printHelp as phPromote }  from './scripts/wizard/cmd-promote.js';
+import { runBatch,    printHelp as phBatch }    from './scripts/wizard/cmd-batch.js';
+import { runServe,    printHelp as phServe }    from './scripts/wizard/cmd-serve.js';
+
+const cmdHelp = {
+  preflight: phPreflight,
+  'dry-run': phDryRun,
+  preview:   phPreview,
+  promote:   phPromote,
+  batch:     phBatch,
+  serve:     phServe,
+};
 
 // ── Root dir ───────────────────────────────────────────────────────────────
 const rootDir = findWorkspaceRoot();
@@ -55,7 +64,7 @@ const rl = readline.createInterface({ input, output });
 
 function showHelp() {
   console.log(`
-Framer -> Elementor V4 Pipeline Wizard v0.10.0
+Framer -> Elementor V4 Pipeline Wizard v0.11.0
 
 SUBCOMMANDS:
   (default)    Interaktiver Build-Wizard mit Recovery-Mode
@@ -425,8 +434,27 @@ async function main() {
 
 const sub = process.argv[2];
 
-if (sub === 'help' || sub === '--help' || sub === '-h') {
+// ── help <sub> or <sub> --help ────────────────────────────────────────
+const hasHelpFlag = process.argv.includes('--help') || process.argv.includes('-h');
+
+if (hasHelpFlag) {
+  // <sub> --help → show sub-command help
+  if (sub && cmdHelp[sub]) {
+    cmdHelp[sub]();
+    process.exit(0);
+  }
   showHelp();
+  process.exit(0);
+}
+
+if (sub === 'help') {
+  // wizard.js help <sub>
+  const target = process.argv[3];
+  if (target && cmdHelp[target]) {
+    cmdHelp[target]();
+  } else {
+    showHelp();
+  }
   process.exit(0);
 }
 

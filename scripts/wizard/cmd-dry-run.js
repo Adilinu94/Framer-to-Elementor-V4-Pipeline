@@ -5,6 +5,29 @@
  * Generates a build plan without any write operations.
  */
 
+/**
+ * Gibt die Hilfe fuer dieses Subcommand aus.
+ */
+export function printHelp() {
+  console.log(`wizard.js dry-run — Build-Plan ohne Schreibzugriff
+
+USAGE:
+  node wizard.js dry-run
+
+BESCHREIBUNG:
+  Generiert einen vollstaendigen Build-Plan mit allen Pipeline-Phasen
+  (0-4) als JSON. Fuehrt KEINE MCP-Calls aus und schreibt KEINE Daten
+  nach WordPress.
+
+  Nutzlich zur Validierung der Pipeline-Konfiguration vor einem
+  echten Build.
+
+BEISPIEL:
+  node wizard.js dry-run
+  node wizard.js dry-run > build-plan.json
+`);
+}
+
 export async function runDryRun() {
   console.log(`\n${'='.repeat(56)}`);
   console.log('  DRY-RUN — Build-Plan ohne Schreibzugriff');

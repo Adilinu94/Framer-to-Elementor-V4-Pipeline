@@ -344,8 +344,13 @@ function suggestDarkTokenName(property, selector) {
     .replace(/[.#\[\]:>\s,]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 30);
-  return `dark-${base}-${cleanSelector}`;
+    .slice(0, 24);
+  const cleanProperty = property
+    .replace(/^--/, '')
+    .replace(/[^a-z0-9-]/gi, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 20);
+  return `dark-${base}-${cleanSelector}-${cleanProperty}`;
 }
 
 // ─────────────────────────────────────────────
@@ -507,12 +512,70 @@ process.exit(0);
 // ─────────────────────────────────────────────
 
 /**
- * Schreibt das Ergebnis als JSON in die Output-Datei oder stdout.
+ * Formatiert das Dark-Mode-Variable-Set als Markdown-Tabelle.
+ *
+ * @param {object} data - Variable-Set JSON
+ * @returns {string} Markdown-formatierter Output
+ */
+function formatMarkdown(data) {
+  const lines = [];
+  lines.push('# Dark Mode Variables');
+  lines.push('');
+  lines.push(`> Generated: ${data.generated}`);
+  lines.push(`> Mode: ${data.mode}`);
+  lines.push(`> Variables: ${data.summary?.total_variables || 0}`);
+  if (data.summary?.matched_with_light_tokens !== undefined) {
+    lines.push(`> Matched with Light: ${data.summary.matched_with_light_tokens}`);
+  }
+  if (data.summary?.note) {
+    lines.push(`> Note: ${data.summary.note}`);
+  }
+  lines.push('');
+
+  if (!data.variables || data.variables.length === 0) {
+    lines.push('_No dark mode variables found._');
+    return lines.join('\n');
+  }
+
+  lines.push('| token_name | selector | property | dark_value | dark_hex | light_value | gv_id |');
+  lines.push('|------------|----------|----------|------------|----------|-------------|-------|');
+
+  for (const v of data.variables) {
+    const token = (v.token_name || '-').replace(/\|/g, '\\|');
+    const sel = (v.selector || '-').replace(/\|/g, '\\|');
+    const prop = (v.property || '-').replace(/\|/g, '\\|');
+    const darkVal = (v.dark_value || '-').replace(/\|/g, '\\|');
+    const darkHex = v.dark_hex || '-';
+    const lightVal = (v.light_mapping?.light_value || '-').replace(/\|/g, '\\|');
+    const gvId = v.light_mapping?.gv_id || '-';
+    lines.push(`| ${token} | ${sel} | ${prop} | ${darkVal} | ${darkHex} | ${lightVal} | ${gvId} |`);
+  }
+
+  lines.push('');
+  if (data.mcpRouting) {
+    lines.push('## MCP Routing');
+    lines.push('');
+    lines.push(`- **Ability:** \`${data.mcpRouting.ability || 'N/A'}\``);
+    lines.push(`- **Note:** ${data.mcpRouting.note || 'N/A'}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Schreibt das Ergebnis als JSON oder Markdown in die Output-Datei oder stdout.
  *
  * @param {object} data - Ergebnis-JSON
  */
 function writeOutput(data) {
-  const output = JSON.stringify(data, null, 2);
+  const fmt = (args.format || 'json').toLowerCase();
+  let output;
+
+  if (fmt === 'markdown' || fmt === 'md') {
+    output = formatMarkdown(data);
+  } else {
+    output = JSON.stringify(data, null, 2);
+  }
 
   if (args.output) {
     fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });

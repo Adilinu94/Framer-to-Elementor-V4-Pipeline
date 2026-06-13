@@ -6,6 +6,29 @@
  */
 
 /**
+ * Gibt die Hilfe fuer dieses Subcommand aus.
+ */
+export function printHelp() {
+  console.log(`wizard.js serve — Pipeline HTTP-API starten
+
+USAGE:
+  node wizard.js serve [--port <PORT>]
+
+OPTIONS:
+  --port <PORT>   HTTP-Port (default: 7123)
+
+ENDPOINTS:
+  GET  /health         Health-Check (version, uptime)
+  POST /build          Build starten (body: { url, postId })
+  GET  /builds/:id     Build-Status abrufen
+
+BEISPIEL:
+  node wizard.js serve
+  node wizard.js serve --port 3099
+`);
+}
+
+/**
  * Startet einen HTTP-Server für Pipeline-API-Calls.
  *
  * @param {number} [port=7123] - HTTP-Port

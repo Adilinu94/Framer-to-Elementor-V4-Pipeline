@@ -21,6 +21,34 @@ import { pathToFileURL } from 'url';
 import { findFramerExportDir, pipelineDir } from './shared.js';
 
 /**
+ * Gibt die Hilfe fuer dieses Subcommand aus.
+ */
+export function printHelp() {
+  console.log(`wizard.js preflight — 8 System-Checks vor dem Build
+
+USAGE:
+  node wizard.js preflight [--format=json]
+
+OPTIONS:
+  --format=json    JSON-Output statt formatierter Text
+
+CHECKS:
+  1. .env Variablen (WP_API_URL, WP_API_USERNAME, FRAMER_EXPORT_DIR)
+  2. FRAMER_EXPORT_DIR existiert
+  3. WP_API_URL HTTP-Erreichbarkeit
+  4. MCP Discovery (greet + check-setup)
+  5. V2-Plugin / Elementor Version (runtime_available)
+  6. Schema-Endpoint (/wp-json/novamira-adrianv2/v1/prop-schema)
+  7. Disk-Space >= 1 GB
+  8. .mcp.json Config
+
+BEISPIEL:
+  node wizard.js preflight
+  node wizard.js preflight --format=json
+`);
+}
+
+/**
  * Führt alle 8 Preflight-System-Checks aus.
  *
  * @param {boolean} formatJson - true = JSON-Output, false = formatierter Text-Output

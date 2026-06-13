@@ -15,6 +15,33 @@ import path from 'path';
 import { pipelineDir, findWorkspaceRoot, runFile, nodeBin } from './shared.js';
 
 /**
+ * Gibt die Hilfe fuer dieses Subcommand aus.
+ */
+export function printHelp() {
+  console.log(`wizard.js batch — Multi-Page Batch-Build
+
+USAGE:
+  node wizard.js batch --pages <files> [--post-ids <ids>]
+
+OPTIONS:
+  --pages <files>     Komma-separierte XML/HTML-Dateien (Pflicht)
+  --post-ids <ids>    Komma-separierte Post-IDs (optional)
+
+BESCHREIBUNG:
+  Fuehrt die Pipeline fuer mehrere Seiten in einem Durchlauf aus.
+  Reduziert Multi-Page-Deployments von "N separate Sessions" auf
+  "1 Durchlauf".
+
+  Jede Seite durchlaeuft: XML→V4 Konvertierung → Validation.
+  Ergebnis wird als batch-build-summary.json gespeichert.
+
+BEISPIELE:
+  node wizard.js batch --pages exports/home.xml,exports/about.xml
+  node wizard.js batch --pages home.xml,about.xml --post-ids 42,43
+`);
+}
+
+/**
  * Führt einen Batch-Build für mehrere Seiten aus.
  *
  * @param {string} pagesList - Komma-separierte Liste von XML/HTML-Dateien

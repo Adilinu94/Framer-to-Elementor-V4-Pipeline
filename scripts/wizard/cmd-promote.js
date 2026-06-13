@@ -11,6 +11,29 @@ import { pathToFileURL } from 'url';
 import { log, pipelineDir, findWorkspaceRoot } from './shared.js';
 
 /**
+ * Gibt die Hilfe fuer dieses Subcommand aus.
+ */
+export function printHelp() {
+  console.log(`wizard.js promote — Preview auf Live-Seite uebernehmen
+
+USAGE:
+  node wizard.js promote --preview-id <ID> --target-id <ID>
+
+OPTIONS:
+  --preview-id <ID>  Preview-Post-ID (numerisch, Pflicht)
+  --target-id <ID>   Ziel-Post-ID (numerisch, Pflicht)
+
+BESCHREIBUNG:
+  Kopiert den Elementor-Content von einer Preview-Page auf eine
+  Live-Seite. Erstellt vorher ein Backup der Live-Seite unter
+  promote-backup-<targetId>-<timestamp>.json.
+
+BEISPIEL:
+  node wizard.js promote --preview-id 99 --target-id 42
+`);
+}
+
+/**
  * Promoted eine Preview-Page auf eine Live-Seite.
  *
  * @param {string|null} previewId - Preview-Post-ID
