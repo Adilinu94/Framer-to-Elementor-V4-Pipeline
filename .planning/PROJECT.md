@@ -1,7 +1,7 @@
 # framer-v4-pipeline-v2
 
-> **Version:** v0.9.0 | **Stand:** 2026-06-13
-> **GSD:** Phase 1 (Sprint 1 startbereit)
+> **Version:** v0.10.0 | **Stand:** 2026-06-13
+> **GSD:** ✅ Milestone Complete — 4 Sprints abgeschlossen
 
 ---
 
@@ -22,50 +22,25 @@ Die Pipeline orchestriert eine **3-Wege-Symbiose**: Unframer MCP (Live-Struktur-
 ## Requirements
 
 ### Validated (bereits implementiert & getestet)
-- [x] Framer XML → V4 Widget-Tree Konvertierung (`convert-xml-to-v4.js`)
+- [x] Framer XML → V4 Widget-Tree Konvertierung (`convert-xml-to-v4.js`) — C2 Grid, C6 GV-Sub, C1 Component Preservation
 - [x] CSS-Extraktion & Design-Token-Mapping (`design-token-extractor.js`, `extract-framer-styles.js`)
-- [x] Global Class Generator mit Duplikat-Erkennung (`generate-global-classes.js`)
-- [x] Responsive Auto-Scaling (`auto-scale-responsive.js`)
+- [x] Global Class Generator mit C4 Semantic Naming (`generate-global-classes.js`)
+- [x] Responsive Auto-Scaling mit C5 Breakpoint-Awareness (`auto-scale-responsive.js`)
 - [x] Pre-Build-Validierung mit 12 Guards + Score ≥85% (`framer-pre-build-validate.js`)
+- [x] V4 Tree Validator mit D1/D2/D3 Checks (`validate-v4-tree.js`)
 - [x] MCP-Bridge: JSON-RPC 2.0 + Session-Handshake (`lib/mcp-bridge.js`)
 - [x] Asset-Batch-Upload via McpBridge (`asset-to-wp-media.js --execute`)
 - [x] Schema-Sync vom V2-Plugin (`sync-schema.js`)
 - [x] Rollback & Split-Large-Tree (`lib/rollback.js`, `lib/split-large-tree.js`)
-- [x] Animation-Extraktion aus Framer HTML (`framer-animation-extractor.js`)
+- [x] Animation-Extraktion mit C3 Native Routing (`framer-animation-extractor.js`)
+- [x] A1 Component Extraction (`extract-framer-components.js`)
+- [x] A2 Interaction Extraction mit v4-tree Mode (`extract-framer-interactions.js`)
+- [x] A3 Form Extraction (`extract-framer-forms.js`)
+- [x] structuralHash in framer-utils.js (ENH-8 Dedup)
 - [x] Interaktiver CLI-Wizard (`wizard.js`) mit Phase 0–1.4
-- [x] 49 Pipeline-Tests + 12 E2E-Tests + 4 Integration-Tests
+- [x] 77 Pipeline-Tests + 12 E2E-Tests + 4 Integration-Tests = 93 total
 - [x] GitHub CI (7 Jobs)
-
-### Active (Sprint 1 — aktuell)
-
-> Quelle: `V4_DESIGN_IMPROVEMENTS_RESEARCH.md` (v2, 2026-06-13)
-
-| ID | Feature | Kategorie |
-|----|---------|-----------|
-| C2 | Strict Grid Mapping (RC-09 Upgrade) — echtes CSS-Grid-Parsing | Enhancement |
-| C4 | Semantic GC Naming — BEM/Semantic-Naming mit Token-Bezug | Enhancement |
-| C5 | Breakpoint-bewusstes Scaling — `auto-scale-responsive.js` liest `breakpoints.json` | Enhancement |
-| C6 | Token-zu-GV-Substitutions-Pass — Root-Cause Fix für `#111111 × 45` | Enhancement |
-| D3 | GRID_VS_FLEXBOX_COVERAGE Validierungs-Check | Validierung |
-
-### Active (Sprint 2 — geplant)
-
-| ID | Feature | Kategorie |
-|----|---------|-----------|
-| A1 | `extract-framer-components.js` — Component-Definitionen erkennen | Neues Script |
-| A2 | `extract-framer-interactions.js` — V4 Pro Interactions | Neues Script |
-| C1 | Component Preservation in `convert-xml-to-v4.js` | Enhancement |
-| C3 | V4-Native Routing in `framer-animation-extractor.js` (Easing-Map + Route) | Enhancement |
-| B1–B3 | Pipeline-Integration existierender Abilities (kein neues PHP) | Integration |
-| D1 | COMPONENT_REUSE_POTENTIAL Validierungs-Check | Validierung |
-
-### Active (Sprint 3 — geplant)
-
-| ID | Feature | Kategorie |
-|----|---------|-----------|
-| A3 | `extract-framer-forms.js` — Atomic Forms | Neues Script |
-| B4 | `create-atomic-form` Ability (PHP — einzige neue Ability) | Neue Ability |
-| D2 | NATIVE_INTERACTION_COVERAGE (mit `--animation-plan` Flag) | Validierung |
+- [x] GSD-Projekt: .planning/ mit 7 Artefakten (PROJECT, REQUIREMENTS, ROADMAP, PLAN-1–4, STATE, MILESTONE-SUMMARY)
 
 ### Out of Scope (v2+)
 
@@ -120,8 +95,11 @@ Die Pipeline orchestriert eine **3-Wege-Symbiose**: Unframer MCP (Live-Struktur-
 | GC-Generator vor Build | Verhindert `#111111 × 45` Duplikate | Good |
 | B1–B3 als existierend identifiziert | Kein neues PHP nötig (Plugin-Analyse) | Good |
 | Sprint-Reihenfolge korrigiert (C1→Sprint 2) | C1 braucht A1 (Component-Extraktion) | Good |
-| C6 als Root-Cause-Fix priorisiert | GV-Substitutions-Pass ist der fehlende Link | Pending |
+| C6 als Root-Cause-Fix priorisiert | GV-Substitutions-Pass ist der fehlende Link | Complete |
+| structuralHash in framer-utils.js | A1+D1 Doppel-Definition dedupliziert | Complete |
+| C3 `--native` als opt-in | Legacy-GSAP-Pfad nicht brechen | Complete |
+| B1-B3 existierende Abilities | 3/4 existieren im Plugin, nur Doku nötig | Complete |
 
 ---
 
-> **Last Updated:** 2026-06-13 — GSD-Projekt initialisiert, Sprint 1 startbereit
+> **Last Updated:** 2026-06-13 — Milestone Complete, 4 Sprints, 17 Requirements, 77 Tests

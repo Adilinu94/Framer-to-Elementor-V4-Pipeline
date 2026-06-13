@@ -1,16 +1,17 @@
 # STATE — framer-v4-pipeline-v2
 
-> **Letztes Update:** 2026-06-13 — GSD-Projekt initialisiert
+> **Letztes Update:** 2026-06-13 — Milestone Complete (v0.10.0)
 
 ---
 
 ## Aktueller Status
 
 ```
-Phase:     Sprint 1 (bereit)
+Phase:     ✅ Alle 4 Sprints abgeschlossen
 Branch:    main
-HEAD:      48d044e (fix(runde-2): namespace-korrektur, 4 neue PHP-Abilities...)
-Tests:     49/49 ✅
+HEAD:      daf2cd6 (release: package.json v0.7.0 → v0.10.0)
+Tests:     77/77 ✅ (Pipeline) + 12/12 ✅ (E2E) + 4/4 ✅ (Integration) = 93/93
+Version:   v0.10.0 (package.json ≡ CHANGELOG.md ≡ BLUEPRINT.md)
 Remote:    origin https://github.com/Adilinu94/Test1206.git
 ```
 
@@ -18,14 +19,9 @@ Remote:    origin https://github.com/Adilinu94/Test1206.git
 
 ## Aktiver Fokus
 
-**Sprint 1 — Quick Wins + Root-Cause Fix (~5h)**
+**Keine aktiven Tasks — alle 4 Sprints abgeschlossen.**
 
-1. ENH-1 (C2): Strict Grid Mapping in `convert-xml-to-v4.js`
-2. ENH-2 (C4): Semantic GC Naming in `generate-global-classes.js`
-3. ENH-3 (C5): Breakpoint-bewusstes Scaling in `auto-scale-responsive.js`
-4. ENH-4 (C6): Token-zu-GV-Substitutions-Pass (Root-Cause Fix)
-5. VAL-1 (D3): GRID_VS_FLEXBOX_COVERAGE in `validate-v4-tree.js`
-6. Tests: 5 neue Test-Blöcke → 49→54
+Nächster Milestone: End-to-End Test mit echter Framer-URL (letzter offener Punkt BLUEPRINT.md)
 
 ---
 
@@ -33,34 +29,33 @@ Remote:    origin https://github.com/Adilinu94/Test1206.git
 
 | Issue | Schwere | Status |
 |-------|---------|--------|
-| `#111111 × 45` Hardcoded-Hex | 🔴 Kritisch | Wird durch C6 gefixt |
-| DOM-Tiefe 8 | 🔴 Kritisch | Teilfix in Sprint 1, vollständig in Sprint 2 |
-| 0% Global Classes | 🔴 Kritisch | GC-Generator existiert, muss nur ausgeführt werden |
-| auto-scale nutzt Hardcode-Faktoren | 🟡 Mittel | Wird durch C5 gefixt |
-| Keine Components | 🟡 Mittel | Sprint 2 (A1 + C1) |
-| Keine nativen Interaktionen | 🟡 Mittel | Sprint 2 (C3) |
-| Keine Atomic Forms | 🟢 Niedrig | Sprint 3 (A3 + B4) |
+| End-to-End Test mit echter Framer-URL | 🟡 Mittel | Offen (letzter BLUEPRINT.md Punkt) |
 
 ---
 
 ## Letzte Änderungen
 
-- **2026-06-13**: Repo auf Test1206 HEAD (48d044e) aktualisiert
-- **2026-06-13**: V4_DESIGN_IMPROVEMENTS_RESEARCH.md v2 — Analyse integriert, Sprints umgeordnet
+- **2026-06-13**: Sprint 4 abgeschlossen — C3 Native Routing, structuralHash Dedup, A2 v4-tree Mode (+6 Tests)
+- **2026-06-13**: Sprint 3 abgeschlossen — A3 Forms, B4 create-atomic-form, D2 Native Coverage (+4 Tests)
+- **2026-06-13**: Sprint 2 abgeschlossen — A1 Components, A2 Interactions, C1 Preservation, C3 Easing, D1 Reuse (+6 Tests)
+- **2026-06-13**: Sprint 1 abgeschlossen — C2 Grid, C4 Semantic GC, C5 Breakpoint, C6 GV-Sub, D3 Grid/Flex (+12 Tests)
+- **2026-06-13**: CHANGELOG.md + BLUEPRINT.md auf v0.10.0 aktualisiert
+- **2026-06-13**: MILESTONE-SUMMARY.md erstellt (4 Sprints, 17 Requirements, 77 Tests)
+- **2026-06-13**: package.json v0.7.0 → v0.10.0 synchronisiert
 - **2026-06-13**: GSD-Projekt initialisiert (.planning/)
 
 ---
 
 ## Offene Entscheidungen
 
-- [ ] C6: Eigenes Script oder Pass in `convert-xml-to-v4.js`?
-- [ ] D2: `--animation-plan` Flag oder Wizard-Integration?
+- [ ] End-to-End Test: Mit Unframer MCP (Live-URL) oder lokalem FramerExport?
+- [ ] CI-Pipeline: GitHub Actions um neue Scripts (A1, A2, A3) erweitern?
 
 ---
 
 ## Nächster Schritt
 
 ```
-/gsd-plan-phase 1     # Sprint 1 detailliert planen
-/gsd-execute-phase 1  # Sprint 1 ausführen
+npm run test:all       # Finale Regression (93 Tests)
+git push origin main   # Synchronisieren mit GitHub
 ```
