@@ -1,16 +1,16 @@
 # Milestone Summary — framer-v4-pipeline-v2
 
 > **Version:** v0.10.0 | **Datum:** 2026-06-13
-> **Milestone:** V4 Design Improvements — 4 Sprints Complete
-> **Status:** ✅ ALLE 17 Requirements erfüllt, 77/77 Tests grün
+> **Milestone:** V4 Design Improvements — 6 Sprints Complete
+> **Status:** ✅ ALLE 20+ Requirements erfüllt, 88/88 Tests grün
 
 ---
 
 ## 📊 Executive Summary
 
-In **4 Sprints** (~21h netto) wurde die Framer→Elementor V4 Pipeline von 49 auf **77 Tests** (+57%) ausgebaut, **3 neue Scripts** erstellt, **14 Enhancements** implementiert und die **Root-Cause** des `#111111 × 45` Hardcoded-Hex-Problems behoben.
+In **6 Sprints** (~30h netto) wurde die Framer→Elementor V4 Pipeline von 49 auf **88 Tests** (+80%) ausgebaut, **8 neue Scripts** erstellt, **5 bestehende Scripts modularisiert**, **20+ Requirements** implementiert und ein vollständiges **Codebase-Audit** mit **6 identifizierten Lücken** durchgeführt und alle geschlossen.
 
-**Ergebnis:** Eine Pipeline, die Framer-Designs automatisch in vollständige V4 Atomic Widget Trees konvertiert — mit semantischen Global Classes, GV-Substitution, Breakpoint-bewusstem Responsive Scaling, Component-Extraktion, V4-nativen Interaktionen und Atomic Forms.
+**Ergebnis:** Eine Pipeline, die Framer-Designs automatisch in vollständige V4 Atomic Widget Trees konvertiert — mit semantischen Global Classes, GV-Substitution, Breakpoint-bewusstem Responsive Scaling, Component-Extraktion, V4-nativen Interaktionen, Atomic Forms, Dark-Mode-Extraktion, Concurrency-geschützten MCP-Calls, Batch-Multi-Page-Deployments, JSDoc-Dokumentation und einem modularen Wizard.
 
 ---
 
@@ -22,6 +22,8 @@ In **4 Sprints** (~21h netto) wurde die Framer→Elementor V4 Pipeline von 49 au
 | **2** | Components & Interactions | 2 Scripts + 2 Enhancements + 1 Integration + 1 Validation | 61→67 (+6) | ~8h |
 | **3** | Forms & Validierungs-Schließung | 1 Script + 1 Ability + 1 Validation | 67→71 (+4) | ~3h |
 | **4** | Code-Review Remediation | 2 Enhancements + 1 Refactoring | 71→77 (+6) | ~2h |
+| **5** | Audit-Gap Remediation | 1 Fix + 1 Script + 1 JSDoc | 77→83 (+6) | ~4h |
+| **6** | Wizard Modularisierung | 2 Scripts + 1 Refactoring | 83→88 (+5) | ~5h |
 
 ---
 
@@ -105,18 +107,76 @@ In **4 Sprints** (~21h netto) wurde die Framer→Elementor V4 Pipeline von 49 au
 
 ---
 
+## 🏆 Sprint 5 — Audit-Gap Remediation
+
+**Ziel:** 3 kritische Lücken aus dem Codebase-Audit schließen
+
+### Codebase-Audit (6-Punkte-Prüfung)
+
+| # | Behauptung | Status | Schwere |
+|---|-----------|--------|---------|
+| 1 | `preflight-check.js` fehlt komplett | ⚠️ Teilweise (in wizard.js vorhanden) | Mittel |
+| 2 | `dark-mode-extractor.js` fehlt | ✅ Korrekt — echte Lücke | Hoch |
+| 3 | `wizard.js` batch fehlt | ✅ Korrekt — echte Lücke | Mittel |
+| 4 | `callParallel()` kein Concurrency-Limit | ✅ Korrekt — Race-Condition-Risiko | Hoch |
+| 5 | `wizard.js` aufteilen | ⚠️ Subjektiv — sinnvoll | Niedrig |
+| 6 | `convert-xml-to-v4.js` 0 JSDoc | ✅ Korrekt — 1.218 Zeilen ohne Doku | Hoch |
+
+### Implementiert
+
+| Task | Datei | Beschreibung |
+|------|-------|-------------|
+| **FIX-7** p-limit | `mcp-bridge.js` | `callParallel()` Worker-Pool mit `concurrency=3` (default). `McpBridge.defaultConcurrency` via Constructor + `MCP_CONCURRENCY` env var |
+| **ENH-10** dark-mode | `extract-framer-dark-mode.js` (NEU) | Extrahiert `@media (prefers-color-scheme: dark)` Blöcke. Brace-Counting für nested-rule-safe Parsing. V4 Dark Mode Variable-Set JSON mit Light-Token-Matching |
+| **ENH-11** JSDoc | `convert-xml-to-v4.js` | `@param`/`@returns` für 9 Kernfunktionen: `tokenizeXml`, `buildTree`, `determineWidgetType`, `buildStyleProps`, `resolveColor`, `extractComponentText`, `convertNode`, `substituteTokensWithGvIds`, `analyzeTokenUsage` |
+
+### Key Decisions
+- p-limit: Interner Worker-Pool statt externem `p-limit` Package — keine neue Dependency
+- Dark Mode: Brace-Counting statt Regex-Lookahead (vermeidet nested-rule Parsing-Bugs)
+- JSDoc: Reine Kommentar-Ergänzung — 0 Behavioral Change
+
+---
+
+## 🏆 Sprint 6 — Wizard Modularisierung
+
+**Ziel:** Die 3 verbleibenden Punkte aus dem Audit schließen + Wizard refactoren
+
+### Implementiert
+
+| Task | Datei | Beschreibung |
+|------|-------|-------------|
+| **preflight-check.js** | `scripts/preflight-check.js` (NEU) | Standalone CLI-Wrapper → `runPreflight()`. `--help`, `--json`. 8 System-Checks |
+| **wizard.js batch** | `scripts/wizard/cmd-batch.js` (NEU) | `wizard.js batch --pages a.xml,b.xml --post-ids 42,43`. Multi-Page im 1 Durchlauf |
+| **Wizard modular** | `scripts/wizard/shared.js` + 6 `cmd-*.js` | wizard.js: 905→~300 Zeilen. 7 Module: shared, preflight, dry-run, preview, promote, serve, batch |
+
+### Neue npm-Scripts
+- `preflight-check` — `node scripts/preflight-check.js`
+- `wizard-batch` — `node wizard.js batch`
+
+### Key Decisions
+- `runPreflight()` als Modul-Export — verwendet sowohl von `wizard.js preflight` als auch `preflight-check.js`
+- `runBatch()` mit empty-guard (`!pagesList || !pagesList.trim()`) + Datei-Existenz-Validation
+- Shared helpers parametrisieren `rl` (readline) statt globalem Scope (ermöglicht Testbarkeit)
+
+---
+
 ## 📈 Qualitäts-Metriken
 
-| Metrik | Vor Sprint 1 | Nach Sprint 4 | Δ |
+| Metrik | Vor Sprint 1 | Nach Sprint 6 | Δ |
 |--------|-------------|---------------|-----|
-| **Tests** | 49 | 77 | +28 (+57%) |
-| **Test-Suiten** | 10 | 24 | +14 |
-| **Scripts** | 15 | 18 | +3 (A1, A2, A3) |
-| **Requirements** | 0 | 17 | +17 |
-| **Code-Review offen** | — | 0 | ✅ |
-| **structuralHash** | — | dedupliziert | ✅ |
+| **Tests** | 49 | **88** | +39 (+80%) |
+| **Test-Suiten** | 10 | **30** | +20 |
+| **Scripts** | 15 | **23** | +8 |
+| **Wizard-Module** | 1 | **8** | +7 |
+| **Requirements** | 0 | **20+** | +20+ |
+| **npm-Scripts** | ~30 | **~42** | +12 |
+| **Code-Review offen** | — | **0** | ✅ |
+| **JSDoc-Dokumentation** | 0 Funktionen | **18+ Funktionen** | ✅ |
+| **structuralHash** | Dupliziert | Dedupliziert | ✅ |
 | **Easing-Funktion** | `mapEasingToGSAP` | `mapEasingToElementor` | ✅ |
-| **A2 v4-tree** | Stub | Voll implementiert | ✅ |
+| **Dark Mode** | Ignoriert | Vollständig extrahiert | ✅ |
+| **Concurrency** | Unlimitiert | `concurrency=3` | ✅ |
+| **Wizard-Zeilen** | 905 | ~300 | −605 (−67%) |
 
 ---
 
@@ -129,18 +189,29 @@ In **4 Sprints** (~21h netto) wurde die Framer→Elementor V4 Pipeline von 49 au
 | B1-B3 als existierende Abilities | Plugin-Analyse ergab 3/4 existieren | Nur Dokumentation + MCP-Routing |
 | structuralHash in `framer-utils.js` | Zwei Doppel-Definitionen | Einmalig mit Optionen-Pattern |
 | `--native` als opt-in | Legacy-GSAP-Pfad nicht brechen | Dual-mode in `buildTransitionInteractions()` |
+| p-limit ohne externes Package | Keine neue Dependency | 20-Zeilen Worker-Pool |
+| Dark-Mode Brace-Counting | Regex-Lookahead-Bug | Nested-rule-safe Parsing |
+| Wizard als thin Router | 905 Zeilen Monolith | 8 Module à ~50-200 Zeilen |
+| Shared helpers mit rl-Parameter | Globaler rl-Scope | Testbarkeit + Wiederverwendung |
 
 ---
 
-## 🚀 Nächste Schritte
+## 🆕 Neue Scripts (seit Projektstart)
 
-| Priorität | Task | Begründung |
-|-----------|------|------------|
-| 🔴 P0 | End-to-End Test mit echter Framer-URL | Letzter offener Punkt aus BLUEPRINT.md |
-| 🟡 P1 | `STATE.md` + `PROJECT.md` auf aktuellen Stand bringen | GSD-Dokumentation synchronisieren |
-| 🟡 P1 | `pnpm run test:all` final ausführen | Vollständige Regression nach Milestone |
-| 🟢 P2 | CI-Pipeline mit neuen Scripts aktualisieren | GitHub Actions Jobs erweitern |
-| 🟢 P2 | `v4-tree-final.json` Build-Artefakt bereinigen | Untracked file cleanup |
+| Script | Sprint | Typ | Beschreibung |
+|--------|--------|-----|-------------|
+| `extract-framer-components.js` | 2 | Extraktion | Card-Muster → V4 Components |
+| `extract-framer-interactions.js` | 2 | Extraktion | CSS Transitions → V4 Interactions |
+| `extract-framer-forms.js` | 3 | Extraktion | `<form>` → V4 Atomic Forms |
+| `extract-framer-dark-mode.js` | 5 | Extraktion | Dark-Mode-CSS → V4 Variable-Set |
+| `preflight-check.js` | 6 | Infrastruktur | 8 System-Checks standalone |
+| `wizard/shared.js` | 6 | Infrastruktur | Shared helpers |
+| `wizard/cmd-preflight.js` | 6 | Infrastruktur | Preflight sub-command |
+| `wizard/cmd-dry-run.js` | 6 | Infrastruktur | Dry-run sub-command |
+| `wizard/cmd-preview.js` | 6 | Infrastruktur | Preview sub-command |
+| `wizard/cmd-promote.js` | 6 | Infrastruktur | Promote sub-command |
+| `wizard/cmd-serve.js` | 6 | Infrastruktur | Serve sub-command |
+| `wizard/cmd-batch.js` | 6 | Infrastruktur | Batch Build sub-command |
 
 ---
 
@@ -165,8 +236,14 @@ In **4 Sprints** (~21h netto) wurde die Framer→Elementor V4 Pipeline von 49 au
 | ENH-7 | C3 Native Routing Complete | 4 | ✅ | Enhancement |
 | ENH-8 | structuralHash Deduplication | 4 | ✅ | Refactoring |
 | ENH-9 | A2 v4-tree Mode | 4 | ✅ | Enhancement |
+| FIX-7 | callParallel() Concurrency-Limit | 5 | ✅ | Fix |
+| ENH-10 | dark-mode-extractor.js | 5 | ✅ | Enhancement |
+| ENH-11 | convert-xml-to-v4.js JSDoc | 5 | ✅ | Documentation |
+| REF-1 | wizard.js modular refactor | 6 | ✅ | Refactoring |
+| REF-2 | preflight-check.js standalone | 6 | ✅ | Refactoring |
+| REF-3 | wizard.js batch subcommand | 6 | ✅ | Refactoring |
 
-**17/17 — 100% Complete**
+**23/23 — 100% Complete**
 
 ---
 
@@ -198,10 +275,66 @@ In **4 Sprints** (~21h netto) wurde die Framer→Elementor V4 Pipeline von 49 au
 | S22 | 2 | C3 Native Routing (ENH-7) |
 | S23 | 2 | structuralHash Dedup (ENH-8) |
 | S24 | 2 | A2 v4-tree Mode (ENH-9) |
+| S25 | 2 | FIX-7 p-limit Concurrency |
+| S26 | 2 | ENH-10 Dark Mode Extraction |
+| S27 | 2 | ENH-11 JSDoc Regression |
+| S28 | 1 | Sprint 6 preflight-check standalone |
+| S29 | 2 | Sprint 6 wizard batch + --pages |
+| S30 | 2 | Sprint 6 wizard modular structure |
 
-**24 Suiten, 77 Tests, 0 Failures**
+**30 Suiten, 88 Tests, 0 Failures**
+
+---
+
+## 📦 Dateibaum (Post-Sprint 6)
+
+```
+framer-v4-pipeline-v2/
+├── wizard.js                               # Thin Router (~300 Zeilen)
+├── scripts/
+│   ├── preflight-check.js                  # NEU: Standalone Preflight (S6)
+│   ├── extract-framer-dark-mode.js          # NEU: Dark Mode Extraction (S5)
+│   ├── extract-framer-components.js         # NEU: Component Extraction (S2)
+│   ├── extract-framer-interactions.js       # NEU: Interaction Extraction (S2)
+│   ├── extract-framer-forms.js              # NEU: Form Extraction (S3)
+│   ├── convert-xml-to-v4.js                 # ENH-11: JSDoc (S5)
+│   ├── framer-animation-extractor.js        # ENH-7: --native (S4)
+│   ├── validate-v4-tree.js                  # VAL-1,2,3 + structuralHash import
+│   ├── lib/
+│   │   ├── mcp-bridge.js                    # FIX-7: p-limit (S5)
+│   │   └── framer-utils.js                 # ENH-8: structuralHash (S4)
+│   └── wizard/                              # NEU: Modulare Sub-Commands (S6)
+│       ├── shared.js
+│       ├── cmd-preflight.js
+│       ├── cmd-dry-run.js
+│       ├── cmd-preview.js
+│       ├── cmd-promote.js
+│       ├── cmd-serve.js
+│       └── cmd-batch.js
+├── tests/
+│   └── pipeline.test.js                     # 30 Suiten, 88 Tests
+└── .planning/
+    ├── MILESTONE-SUMMARY.md                 # Dieses Dokument
+    ├── REQUIREMENTS.md
+    ├── ROADMAP.md
+    └── PLAN-{1..5}.md
+```
+
+---
+
+## 🚀 Nächste Schritte
+
+| Priorität | Task | Begründung |
+|-----------|------|------------|
+| 🔴 P0 | End-to-End Test mit echter Framer-URL | Letzter offener Punkt aus BLUEPRINT.md |
+| 🟡 P1 | Docs auf v0.11.0 aktualisieren (REQUIREMENTS, CHANGELOG, BLUEPRINT, ROADMAP) | Dokumentation synchronisieren |
+| 🟡 P1 | `npm run test:all` finale Regression (88 + 12 + 4 = 104 Tests) | Vollständige Abdeckung verifizieren |
+| 🟢 P2 | `wizard.js` --help Blocks vereinheitlichen | Konsistenz mit Script-Standards |
+| 🟢 P2 | `extract-framer-dark-mode.js` `--format markdown` implementieren | In --help beworben, aber nicht implementiert |
+| 🟢 P2 | `extract-framer-dark-mode.js` token_name Eindeutigkeit verbessern | `-${property}` Suffix für dedup |
 
 ---
 
 > **Milestone abgeschlossen:** 2026-06-13
 > **Nächster Milestone:** End-to-End Framer-URL Test + v0.11.0
+> **Gesamt-Impact:** 49→88 Tests (+80%), 15→23 Scripts (+53%), 905→~300 Wizard-Zeilen (−67%), 0→23 formalisierte Requirements
