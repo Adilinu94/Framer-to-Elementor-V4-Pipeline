@@ -2,7 +2,7 @@
 
 > **Erstellt:** 2026-06-13 | **Quelle:** V4_DESIGN_IMPROVEMENTS_RESEARCH.md (v2)
 > **Start:** Sprint 1 | **Ziel:** Design-Score 25% → 90%+
-> **Status:** ✅ Alle 4 Sprints abgeschlossen (77 Tests, 17 Requirements)
+> **Status:** ✅ Alle 6 Sprints abgeschlossen (88 Tests, 23 Requirements)
 
 ---
 
@@ -98,19 +98,69 @@
 
 ---
 
+## Phase 5: Sprint 5 — Audit-Gap Remediation ✅ Complete
+
+**Geschätzte Dauer:** ~4h | **Tatsächlich:** ~4h
+**Quelle:** Codebase-Audit (3 kritische Lücken)
+
+| Task | Typ | Aufwand | Datei(en) |
+|------|-----|---------|-----------|
+| **FIX-7** callParallel() p-limit | Fix | ~1h | `mcp-bridge.js` |
+| **ENH-10** `extract-framer-dark-mode.js` | Neues Script | ~1.5h | Neu |
+| **ENH-11** convert-xml-to-v4.js JSDoc | Documentation | ~1h | `convert-xml-to-v4.js` |
+| **Tests** 3 neue Test-Suiten | Testing | ~0.5h | `pipeline.test.js` |
+
+### Akzeptanzkriterien
+- [x] `callParallel()` Worker-Pool mit `concurrency=3` (default)
+- [x] `McpBridge.defaultConcurrency` via Constructor + `MCP_CONCURRENCY` env var
+- [x] Dark-Mode-CSS → V4 Variable-Set JSON (Brace-Counting, Light-Token-Matching)
+- [x] 9 Kernfunktionen in `convert-xml-to-v4.js` mit JSDoc (`@param`, `@returns`)
+- [x] `npm test` → 83/83 (+6 Tests)
+
+---
+
+## Phase 6: Sprint 6 — Wizard Modularisierung ✅ Complete
+
+**Geschätzte Dauer:** ~5h | **Tatsächlich:** ~5h
+**Quelle:** Codebase-Audit (3 verbleibende Punkte)
+
+| Task | Typ | Aufwand | Datei(en) |
+|------|-----|---------|-----------|
+| **preflight-check.js** standalone | Refactoring | ~1h | `preflight-check.js`, `cmd-preflight.js` |
+| **wizard.js batch** | Neues Feature | ~1.5h | `cmd-batch.js` |
+| **Wizard modular** | Refactoring | ~2.5h | `wizard.js` + 7 Module |
+| **Tests** 3 neue Test-Suiten | Testing | ~0.5h | `pipeline.test.js` |
+
+### Akzeptanzkriterien
+- [x] `node scripts/preflight-check.js` standalone (8 Checks, --help, --json)
+- [x] `wizard.js batch --pages a.xml,b.xml --post-ids 42,43`
+- [x] Batch: empty-guard + Datei-Existenz-Validation + Batch-Summary JSON
+- [x] wizard.js: 905→~300 Zeilen, 8 Module in `scripts/wizard/`
+- [x] `npm test` → 88/88 (+5 Tests)
+
+---
+
 ## Qualitätssprung (Metriken)
 
-| Metrik | Vorher | Sprint 1 | Sprint 2 | Sprint 3 |
-|--------|--------|----------|----------|----------|
-| DOM-Tiefe | 8 | ≤6 | ≤4 | ≤3 | ≤3 |
-| Global Class % | 0% | ≥60% | ≥80% | ≥90% | ≥90% |
-| GV-Substitution % | 0% | ≥80% | ≥90% | ≥95% | ≥95% |
-| Grid-Nutzung | 0 | ≥10% | ≥25% | ≥35% | ≥35% |
-| Components | 0 | 0 | ≥5 | ≥10 | ≥10 |
-| Interaktionen | 0 | 0 | V4-native | V4-native | V4-native |
-| Tests | 49 | 61 | 67 | 71 | 77 |
-| structuralHash | — | dupliziert | dupliziert | dupliziert | dedupliziert |
-| Code-Review offen | — | — | 3 Punkte | 3 Punkte | 0 Punkte |
+| Metrik | Vorher | Sprint 1 | Sprint 2 | Sprint 3 | Sprint 4 | Sprint 5 | Sprint 6 |
+|--------|--------|----------|----------|----------|----------|----------|----------|
+| DOM-Tiefe | 8 | ≤6 | ≤4 | ≤3 | ≤3 | ≤3 | ≤3 |
+| Global Class % | 0% | ≥60% | ≥80% | ≥90% | ≥90% | ≥90% | ≥90% |
+| GV-Substitution % | 0% | ≥80% | ≥90% | ≥95% | ≥95% | ≥95% | ≥95% |
+| Grid-Nutzung | 0 | ≥10% | ≥25% | ≥35% | ≥35% | ≥35% | ≥35% |
+| Components | 0 | 0 | ≥5 | ≥10 | ≥10 | ≥10 | ≥10 |
+| Interaktionen | 0 | 0 | V4-native | V4-native | V4-native | V4-native | V4-native |
+| Tests | 49 | 61 | 67 | 71 | 77 | 83 | 88 |
+| structuralHash | — | dupliziert | dupliziert | dupliziert | dedupliziert | dedupliziert | dedupliziert |
+| Code-Review offen | — | — | 3 Punkte | 3 Punkte | 0 Punkte | 0 Punkte | 0 Punkte |
+| Scripts/Module | 15 | 16 | 18 | 19 | 19 | 20 | 28 |
+| Requirements | 0 | 5 | 10 | 14 | 17 | 20 | 23 |
+| Dark Mode | ✗ | ✗ | ✗ | ✗ | ✗ | ✅ | ✅ |
+| Wizard Struktur | monolith | monolith | monolith | monolith | monolith | monolith | modular (8 files) |
+| Preflight standalone | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✅ |
+| Batch Multi-Page | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✅ |
+| callParallel() Limiter | ✗ | ✗ | ✗ | ✗ | ✗ | ✅ (p-limit) | ✅ |
+| JSDoc (convert-xml) | 0% | 0% | 0% | 0% | 0% | 9 functions | 9 functions |
 
 ---
 
@@ -129,3 +179,5 @@
 | Sprint 2 | A1 Components, A2 Interactions, C1 Preservation, C3 Easing, D1 Reuse | ✅ 67 Tests |
 | Sprint 3 | A3 Forms, B4 create-atomic-form, D2 Native Coverage | ✅ 71 Tests |
 | Sprint 4 | C3 Native Routing, structuralHash Dedup, A2 v4-tree Mode | ✅ 77 Tests |
+| Sprint 5 | FIX-7 p-limit, ENH-10 dark-mode-extractor, ENH-11 JSDoc | ✅ 83 Tests |
+| Sprint 6 | preflight-check standalone, wizard.js batch, Wizard modular (8 files) | ✅ 88 Tests |

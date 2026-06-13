@@ -1,7 +1,7 @@
 # Requirements — framer-v4-pipeline-v2
 
 > **Definiert:** 2026-06-13 | **Quelle:** V4_DESIGN_IMPROVEMENTS_RESEARCH.md (v2)
-> **Update:** 2026-06-13 — Sprint 4 Code-Review Remediation abgeschlossen
+> **Update:** 2026-06-13 — Sprint 6 Wizard Modularisierung abgeschlossen
 > **Core Value:** Token-effizienter, stabiler Framer→V4-Workflow
 
 ---
@@ -118,6 +118,58 @@
 
 ---
 
+## v5 Requirements (Sprint 5) ✅ Complete
+
+### FIX-7: callParallel() Concurrency-Limit
+- **ID:** `FIX-7`
+- **Beschreibung:** `McpBridge.callParallel()` Worker-Pool mit konfigurierbarem Concurrency-Limit (default 3). Verhindert Race-Conditions und PHP-Timeout bei 10+ parallelen Requests gegen lokale WP-Instanzen.
+- **Datei:** `scripts/lib/mcp-bridge.js`
+- **Akzeptanz:** `callParallel()` mit `{ concurrency: N }` Option. `McpBridge.defaultConcurrency` via Constructor + `MCP_CONCURRENCY` env var.
+- **Test:** `defaultConcurrency === 3`, constructor override
+
+### ENHANCEMENT-10: dark-mode-extractor.js
+- **ID:** `ENH-10`
+- **Beschreibung:** Extrahiert `@media (prefers-color-scheme: dark)` CSS-Blöcke aus Framer-HTML. Generiert V4 Dark Mode Variable-Set JSON mit Light-Token-Matching.
+- **Datei:** `scripts/extract-framer-dark-mode.js` (NEU)
+- **Output:** `tokens/dark-mode-variables.json`
+- **Technik:** Brace-Counting statt Regex-Lookahead (nested-rule-safe)
+- **Test:** CSS mit `@media (prefers-color-scheme: dark)` → extrahierte Overrides im Output
+
+### ENHANCEMENT-11: convert-xml-to-v4.js JSDoc
+- **ID:** `ENH-11`
+- **Beschreibung:** JSDoc-Typ-Dokumentation für 9 Kernfunktionen in `convert-xml-to-v4.js` (1.218 Zeilen, zuvor 0 JSDoc).
+- **Datei:** `scripts/convert-xml-to-v4.js`
+- **Funktionen:** `tokenizeXml`, `buildTree`, `determineWidgetType`, `buildStyleProps`, `resolveColor`, `extractComponentText`, `convertNode`, `substituteTokensWithGvIds`, `analyzeTokenUsage`
+- **Akzeptanz:** Kein Behavioral Change. Alle 77 bestehenden Tests laufen unverändert.
+- **Test:** JSDoc-Regression (XML→V4 funktioniert weiterhin)
+
+---
+
+## v6 Requirements (Sprint 6) ✅ Complete
+
+### FIX-8: preflight-check.js standalone
+- **ID:** `FIX-8`
+- **Beschreibung:** `runPreflight()` aus wizard.js (905 Zeilen) in eigenständiges Script extrahiert. Aufrufbar als `node scripts/preflight-check.js` oder `wizard.js preflight`.
+- **Dateien:** `scripts/preflight-check.js` (NEU), `scripts/wizard/cmd-preflight.js` (NEU)
+- **Akzeptanz:** 8 System-Checks standalone (--help, --json). wizard.js preflight delegiert an Modul.
+- **Test:** Script existiert, --help output enthält "8 System-Checks"
+
+### FIX-9: wizard.js batch Subcommand
+- **ID:** `FIX-9`
+- **Beschreibung:** `wizard.js batch --pages file1.xml,file2.xml --post-ids 42,43` — Multi-Page-Deployments in einem Durchlauf.
+- **Dateien:** `scripts/wizard/cmd-batch.js` (NEU), `wizard.js` (Dispatch)
+- **Akzeptanz:** Validierung leerer --pages, Datei-Existenz-Check, Batch-Summary JSON
+- **Test:** `--help` zeigt batch, `batch` ohne `--pages` → exit code 2
+
+### REFACTOR-1: wizard.js modular
+- **ID:** `REF-1`
+- **Beschreibung:** wizard.js von 905-Zeilen-Monolith in 8 Module in `scripts/wizard/` aufgeteilt: shared.js, cmd-preflight, cmd-dry-run, cmd-preview, cmd-promote, cmd-serve, cmd-batch. wizard.js ist jetzt ein Thin Router (~300 Zeilen).
+- **Dateien:** `scripts/wizard/shared.js` + 6 `cmd-*.js` (NEU), `wizard.js` (rewritten)
+- **Akzeptanz:** Alle Subcommands unverändert nutzbar. Shared helpers parametrisieren `rl` für Testbarkeit.
+- **Test:** Modular-Struktur-Tests (Exports, empty-guard)
+
+---
+
 ## v4 Requirements (Sprint 4) ✅ Complete
 
 ### ENHANCEMENT-7: C3 Native Routing Completion
@@ -164,9 +216,15 @@
 | ENH-7 (C3-native) | Sprint 4 | ✅ Complete |
 | ENH-8 (structHash) | Sprint 4 | ✅ Complete |
 | ENH-9 (A2-v4tree) | Sprint 4 | ✅ Complete |
+| FIX-7 (p-limit) | Sprint 5 | ✅ Complete |
+| ENH-10 (dark-mode) | Sprint 5 | ✅ Complete |
+| ENH-11 (JSDoc) | Sprint 5 | ✅ Complete |
+| FIX-8 (preflight-standalone) | Sprint 6 | ✅ Complete |
+| FIX-9 (wizard-batch) | Sprint 6 | ✅ Complete |
+| REF-1 (wizard-modular) | Sprint 6 | ✅ Complete |
 
-**Coverage:** 17 Requirements → 4 Sprints → 100% complete
-**Test-Abdeckung:** 24 Test-Suiten, 77 Test-Fälle, alle grün
+**Coverage:** 23 Requirements → 6 Sprints → 100% complete
+**Test-Abdeckung:** 30 Test-Suiten, 88 Test-Fälle, alle grün
 
 ---
 
