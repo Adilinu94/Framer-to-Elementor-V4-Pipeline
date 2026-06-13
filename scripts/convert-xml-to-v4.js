@@ -221,6 +221,12 @@ function determineWidgetType(attrs, xmlNode) {
   if (attrs.display === 'grid') return 'e-div-block';
   if (attrs['grid-template-columns'] || attrs['grid-template-rows']) return 'e-div-block';
 
+  // ── C1: Component Preservation ──
+  // Framer Component Instances → V4 e-component Widget.
+  // componentId/componentName indicate a reuseable component that should
+  // be rendered as e-component with property overrides.
+  if (attrs.componentId || attrs.componentName) return 'e-component';
+
   // ── Explicit Component Name Mapping (RC-16 Fix) ──
   // Check if the Framer component name maps directly to a V4 widget type.
   // Falls through to heuristic if the map entry's guard condition isn't met.
@@ -590,6 +596,7 @@ function uniqueWidgetId(raw) {
 // these default props, flatten it to reduce DOM depth.
 function isPassThroughContainer(xmlNode, widgetType) {
   if (widgetType !== 'e-flexbox') return false;
+  // C1: e-component instances must NOT be flattened — they carry component identity
   const { attrs } = xmlNode;
   const meaningfulChildren = (xmlNode.children || []).filter(c => c.tagName && c.tagName !== '_root');
   // Only flatten if exactly one child (pure wrapper)
@@ -730,6 +737,23 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
     if (attrs.height) settings.height = wrapSize(attrs.height);
   }
 
+  // C1: e-component — store component reference + property overrides
+  if (widgetType === 'e-component') {
+    settings.tag = attrs.tag || 'div';
+    settings['component-id'] = wrapType('string', attrs.componentId || attrs.componentName || '');
+    // Store text overrides as component properties
+    if (attrs.componentOverrides) {
+      try {
+        const overrides = typeof attrs.componentOverrides === 'string'
+          ? JSON.parse(attrs.componentOverrides)
+          : attrs.componentOverrides;
+        for (const [key, val] of Object.entries(overrides)) {
+          settings[`property-${key}`] = wrapType('string', String(val));
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+
   // ── Style variants (VERBOSE format: id/type/label required by elementor-set-content) ──
   const baseVariant = {
     meta:  { breakpoint: 'desktop', state: null },
@@ -763,9 +787,9 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
   }
 
   // ── Determine elType (required by elementor-set-content) ──
-  // Atomic containers (e-flexbox, e-div-block) are Elementor element types.
+  // Atomic containers (e-flexbox, e-div-block) and components are Elementor element types.
   // Atomic widgets (e-heading, e-paragraph, ...) use elType:"widget" + widgetType.
-  const ATOMIC_ELEMENT_TYPES = new Set(['e-flexbox', 'e-div-block']);
+  const ATOMIC_ELEMENT_TYPES = new Set(['e-flexbox', 'e-div-block', 'e-component']);
   const elType = ATOMIC_ELEMENT_TYPES.has(widgetType) ? widgetType : 'widget';
 
   // RC-01 Fix: type field required by server-side batch-build-page.php

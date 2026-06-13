@@ -325,17 +325,19 @@ function mapTransitionToV4Interaction(declarations, selector) {
   };
 }
 
+// C3 Fix: Elementor-native easing names (not GSAP)
+// Route to edit-interaction statt inject-animation-code.js
 function mapEasingToGSAP(cssEasing) {
   const map = {
-    'ease': 'power2.out',
-    'ease-in': 'power2.in',
-    'ease-out': 'power2.out',
-    'ease-in-out': 'power2.inOut',
-    'linear': 'none',
-    'cubic-bezier(0.4, 0, 0.2, 1)': 'power3.out',
-    'cubic-bezier(0, 0, 0.2, 1)': 'power4.out',
+    'ease': 'ease-out',
+    'ease-in': 'ease-in',
+    'ease-out': 'ease-out',
+    'ease-in-out': 'ease-in-out',
+    'linear': 'linear',
+    'cubic-bezier(0.4, 0, 0.2, 1)': 'ease-out',
+    'cubic-bezier(0, 0, 0.2, 1)': 'ease-out',
   };
-  return map[cssEasing] || 'power2.out';
+  return map[cssEasing] || 'ease-out';
 }
 
 function buildTransitionInteractions(animatedRules) {

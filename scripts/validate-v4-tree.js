@@ -591,6 +591,54 @@ function checkGridVsFlexboxCoverage(el, path, errors, warnings) {
   }
 }
 
+// ─── Check 9: COMPONENT_REUSE_POTENTIAL (D1) ─────────────────────────
+
+function checkComponentReusePotential(tree, errors, warnings) {
+  const containerMap = new Map();
+
+  function structuralHash(children) {
+    if (!Array.isArray(children) || children.length < 2) return null;
+    const parts = children.map(el => {
+      const wt = el.widgetType || el.elType || 'unknown';
+      const kids = (el.elements || el.children || []).length;
+      const styleKeys = Object.keys(el.styles || {}).sort().join(',');
+      return `${wt}|${kids}|${styleKeys}`;
+    });
+    return parts.join('::');
+  }
+
+  function walkForComponents(node, pathStr) {
+    const children = node.elements || node.children || [];
+    if (children.length >= 2) {
+      const hash = structuralHash(children);
+      if (hash) {
+        if (!containerMap.has(hash)) {
+          containerMap.set(hash, { example: children, parents: [] });
+        }
+        containerMap.get(hash).parents.push(node.id || pathStr);
+      }
+    }
+    children.forEach((child, i) => {
+      walkForComponents(child, `${pathStr}.${i}`);
+    });
+  }
+
+  const roots = Array.isArray(tree) ? tree : [tree];
+  roots.forEach((root, i) => walkForComponents(root, String(i)));
+
+  for (const [hash, group] of containerMap) {
+    if (group.parents.length >= 2) {
+      warnings.push({
+        check: 9, rule: 'COMPONENT_REUSE_POTENTIAL',
+        elementId: group.parents[0],
+        path: group.parents.join(', '),
+        message: `${group.parents.length} duplicate element groups detected — consider extracting as Atomic Component`,
+        parent_ids: group.parents,
+      });
+    }
+  }
+}
+
 // ─── Check: Hardcoded hex (collected as warnings) ───────────────────
 
 function checkHardcodedHex(el, path, warnings) {
@@ -689,6 +737,9 @@ function validate() {
     checkGridVsFlexboxCoverage(el, path, errors, warnings);
   });
 
+  // D1: Tree-level COMPONENT_REUSE_POTENTIAL check
+  checkComponentReusePotential(tree, errors, warnings);
+
   // Tree-level check: DOM depth (not per-element, runs once on full tree)
   checkDomDepth(tree, errors, warnings);
 
@@ -747,6 +798,7 @@ function validate() {
     C6: { name: 'VERBOSE-STYLE-FORMAT', vital: true, weight: 16 },
     C7: { name: 'DOM-DEPTH', vital: false, weight: 8 },
     C8: { name: 'GRID_VS_FLEXBOX', vital: false, weight: 5 },
+    C9: { name: 'COMPONENT_REUSE_POTENTIAL', vital: false, weight: 5 },
     placebo: { name: 'HARDCODED-HEX', vital: false, weight: 0 }
   };
 

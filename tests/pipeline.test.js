@@ -934,6 +934,124 @@ describe('C6: Token-to-GV Substitution', () => {
   });
 });
 
+// ─── Suite 16: A1 Component Extraction ────────────────────────────────────
+
+describe('A1: Component Extraction', () => {
+  test('A1: detects repeated card patterns in V4 tree', () => {
+    const card1 = {
+      id: 'card1', widgetType: 'e-flexbox',
+      settings: { classes: { '$$type': 'classes', value: ['scard'] } },
+      styles: { scard: { variants: [{ meta: { breakpoint: null, state: null }, props: {} }] } },
+      elements: [
+        { id: 'c1-h', widgetType: 'e-heading', settings: { title: { '$$type': 'html-v3', value: { content: { '$$type': 'string', value: 'Card 1' } } } }, styles: {}, elements: [] },
+        { id: 'c1-p', widgetType: 'e-paragraph', settings: { paragraph: { '$$type': 'html-v3', value: { content: { '$$type': 'string', value: 'Desc 1' } } } }, styles: {}, elements: [] },
+      ],
+    };
+    const card2 = JSON.parse(JSON.stringify(card1).replace('Card 1', 'Card 2').replace('Desc 1', 'Desc 2'));
+    card2.id = 'card2';
+
+    const tree = {
+      id: 'section', widgetType: 'e-flexbox', styles: {}, settings: {},
+      elements: [card1, card2],
+    };
+
+    const treeFile = tmpFile('a1-tree.json', tree);
+    const outDir = join(tmpdir(), 'pipeline-test', 'a1-out-' + Date.now());
+    run('extract-framer-components.js', ['--v4-tree', treeFile, '--output', outDir]);
+
+    const plan = readJson(join(outDir, 'components-plan.json'));
+    assert.ok(plan.meta.totalComponents >= 1,
+      `Should detect at least 1 component, got ${plan.meta.totalComponents}`);
+  });
+});
+
+// ─── Suite 17: A2 Interaction Extraction ──────────────────────────────────
+
+describe('A2: Interaction Extraction', () => {
+  test('A2: extracts CSS transition → V4 interaction', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      .hero-text { transition: opacity 0.6s ease-out; }
+    </style></head><body><div class="hero-text">Hello</div></body></html>`;
+    const htmlFile = tmpFile('a2.html', html);
+    const outFile = tmpFile('a2-plan.json');
+    run('extract-framer-interactions.js', ['--html', htmlFile, '--output', outFile]);
+    const plan = readJson(outFile);
+    assert.ok(plan.interactions.length >= 1,
+      `Should extract CSS transition interaction, got ${plan.interactions.length}`);
+  });
+
+  test('A2: uses Elementor easing names (not GSAP)', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      .fade { transition: opacity 0.6s ease; }
+    </style></head><body><div class="fade">Hello</div></body></html>`;
+    const htmlFile = tmpFile('a2-easing.html', html);
+    const outFile = tmpFile('a2-easing.json');
+    run('extract-framer-interactions.js', ['--html', htmlFile, '--output', outFile]);
+    const plan = readJson(outFile);
+    const easing = plan.interactions[0]?.v4_interaction?.effects?.[0]?.easing;
+    assert.ok(easing === 'ease-out' || easing === 'ease-in-out' || easing === 'ease' || easing === 'linear',
+      `Easing should be Elementor name, got: ${easing}`);
+    assert.notEqual(easing, 'power2.out', 'Must NOT use GSAP easing names');
+  });
+});
+
+// ─── Suite 18: C1 Component Preservation ───────────────────────────────────
+
+describe('C1: Component Preservation', () => {
+  test('C1: componentId attr → e-component widget', () => {
+    const xml = `<Frame name="StatCard" componentId="stat-card-v1"><Text name="Metric" text="+100%" font-size="48px"/></Frame>`;
+    const xmlFile = tmpFile('c1-comp.xml', xml);
+    const outFile = tmpFile('c1-comp-v4.json');
+    run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
+    const tree = readJson(outFile);
+    assert.equal(tree.widgetType, 'e-component',
+      `componentId should produce e-component, got ${tree.widgetType}`);
+    assert.equal(tree.settings['component-id'].value, 'stat-card-v1');
+  });
+
+  test('C1: componentName attr → e-component widget', () => {
+    const xml = `<Frame name="Card" componentName="TestimonialCard"><Text name="Quote" text="Great!" font-size="18px"/></Frame>`;
+    const xmlFile = tmpFile('c1-comp2.xml', xml);
+    const outFile = tmpFile('c1-comp2-v4.json');
+    run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
+    const tree = readJson(outFile);
+    assert.equal(tree.widgetType, 'e-component',
+      `componentName should produce e-component, got ${tree.widgetType}`);
+  });
+});
+
+// ─── Suite 19: D1 COMPONENT_REUSE_POTENTIAL ───────────────────────────────
+
+describe('D1: COMPONENT_REUSE_POTENTIAL', () => {
+  test('D1: duplicate groups → warning', () => {
+    const card1 = {
+      id: 'card1', widgetType: 'e-flexbox',
+      settings: { classes: { '$$type': 'classes', value: ['sc'] } },
+      styles: { sc: { variants: [{ meta: { breakpoint: null, state: null }, props: {} }] } },
+      elements: [
+        { id: 'h1', widgetType: 'e-heading', styles: {}, settings: {}, elements: [] },
+        { id: 'p1', widgetType: 'e-paragraph', styles: {}, settings: {}, elements: [] },
+      ],
+    };
+    const card2 = JSON.parse(JSON.stringify(card1));
+    card2.id = 'card2';
+    card2.elements[0].id = 'h2';
+    card2.elements[1].id = 'p2';
+
+    const tree = [{
+      id: 'section', widgetType: 'e-flexbox', styles: {}, settings: {},
+      elements: [card1, card2],
+    }];
+
+    const treeFile = tmpFile('d1-tree.json', tree);
+    const result = run('validate-v4-tree.js', [treeFile, '--mode=warn'], { expectFail: false });
+    const parsed = JSON.parse(result.stdout);
+    const reuseIssues = (parsed.warnings || []).filter(w => w.rule === 'COMPONENT_REUSE_POTENTIAL');
+    assert.ok(reuseIssues.length > 0,
+      `Duplicate groups should trigger COMPONENT_REUSE_POTENTIAL, got ${JSON.stringify(parsed.warnings)}`);
+  });
+});
+
 // ─── Suite 15: D3 GRID_VS_FLEXBOX_COVERAGE ────────────────────────────────
 
 describe('D3: GRID_VS_FLEXBOX_COVERAGE', () => {

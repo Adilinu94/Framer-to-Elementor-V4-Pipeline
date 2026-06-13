@@ -1,0 +1,226 @@
+#!/usr/bin/env node
+/**
+ * extract-framer-interactions.js  —  A2: Interaction Extraction (Sprint 2)
+ *
+ * Extrahiert Framer Scroll/Trigger-Animationen aus HTML und mapped
+ * sie auf V4 Pro Interactions (native JSON, KEIN GSAP).
+ *
+ * Usage:
+ *   node scripts/extract-framer-interactions.js \
+ *     --html FramerExport/index.html \
+ *     --output interactions-plan.json
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { parseArgs } from 'node:util';
+
+const { values: args } = parseArgs({
+  options: {
+    html:     { type: 'string' },
+    'v4-tree':{ type: 'string' },
+    output:   { type: 'string' },
+    'post-id':{ type: 'string' },
+    verbose:  { type: 'boolean', default: false },
+  },
+  strict: false,
+});
+
+if (!args.html && !args['v4-tree']) {
+  process.stderr.write('Error: --html <framer-export> oder --v4-tree <tree.json> required\n');
+  process.exit(2);
+}
+
+const log = (...m) => { if (args.verbose) process.stderr.write('[int-extract] ' + m.join(' ') + '\n'); };
+
+// ─── TRIGGER + EASING MAPS ──────────────────────────────────────────────────
+
+// C3 Fix: Elementor-native easing names (not GSAP)
+const TRIGGER_MAP = {
+  'scroll-into-view': 'scroll',
+  'scroll':           'scroll',
+  'hover':            'mouse',
+  'click':            'click',
+  'page-load':        'entrance',
+  'entrance':         'entrance',
+};
+
+const EASING_MAP = {
+  'ease':                'ease',
+  'ease-in':             'ease-in',
+  'ease-out':            'ease-out',
+  'ease-in-out':         'ease-in-out',
+  'linear':              'linear',
+  'cubic-bezier(0.4, 0, 0.2, 1)': 'ease-out',
+  'cubic-bezier(0, 0, 0.2, 1)':   'ease-out',
+  'power2.out':          'ease-out',
+  'power2.in':           'ease-in',
+  'power2.inOut':        'ease-in-out',
+  'power4.out':          'ease-out',
+  'none':                'linear',
+};
+
+const ANIMATION_EFFECT_MAP = {
+  'opacity':         { effect: 'fade',      v4Type: 'entrance' },
+  'translateY':      { effect: 'slide-up',  v4Type: 'scroll' },
+  'translateX':      { effect: 'slide-left', v4Type: 'scroll' },
+  'scale':           { effect: 'zoom',      v4Type: 'entrance' },
+  'rotate':          { effect: 'rotate',    v4Type: 'entrance' },
+};
+
+// ─── EXTRACTION ──────────────────────────────────────────────────────────────
+
+function extractStyleBlocks(html) {
+  const blocks = [];
+  const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let m;
+  while ((m = styleRe.exec(html)) !== null) blocks.push(m[1]);
+  return blocks.join('\n');
+}
+
+function extractCssTransitions(css) {
+  const interactions = [];
+  const ruleRe = /([^{}]+)\{([^{}]+)\}/g;
+  let m;
+  while ((m = ruleRe.exec(css)) !== null) {
+    const selector = m[1].trim();
+    const body = m[2].trim();
+
+    if (!/transition|animation/.test(body)) continue;
+
+    const decls = {};
+    const propRe = /([\w-]+)\s*:\s*([^;!]+)/g;
+    let dm;
+    while ((dm = propRe.exec(body)) !== null) {
+      decls[dm[1].trim()] = dm[2].trim();
+    }
+
+    const interaction = mapCssToInteraction(decls, selector);
+    if (interaction) interactions.push(interaction);
+  }
+  return interactions;
+}
+
+function mapCssToInteraction(decls, selector) {
+  const transProp = decls['transition-property'] || decls['transition']?.split(' ')[0] || 'opacity';
+  const duration = parseFloat(decls['transition-duration'] || decls['animation-duration'] || '0.3');
+  const delay = parseFloat(decls['transition-delay'] || '0');
+  const easing = (decls['transition-timing-function'] || decls['animation-timing-function'] || 'ease').trim();
+
+  const prop = transProp.replace('transform.', '').trim();
+  const effectInfo = ANIMATION_EFFECT_MAP[prop] || ANIMATION_EFFECT_MAP['opacity'];
+
+  // Detect trigger from selector context
+  const trigger = /appear|scroll/i.test(selector) ? 'scroll' : 'entrance';
+
+  return {
+    selector,
+    v4_interaction: {
+      type: trigger,
+      trigger: trigger === 'scroll' ? 'scroll_into_view' : 'page_load',
+      effects: [{
+        type: 'transform',
+        [prop]: prop === 'opacity'
+          ? { from: 0, to: 1 }
+          : { from: 30, to: 0, unit: 'px' },
+        opacity: prop !== 'opacity' ? { from: 0, to: 1 } : undefined,
+        easing: EASING_MAP[easing] || 'ease-out',
+        duration: Math.round(duration * 1000),
+        delay: Math.round(delay * 1000),
+      }],
+    },
+    meta: {
+      originalProp: transProp,
+      originalDuration: duration,
+      originalEasing: easing,
+    },
+  };
+}
+
+function extractFramerAppearInteractions(html) {
+  const interactions = [];
+  const appearRe = /<[^>]*\sdata-framer-appear-id\s*=\s*['"]([^'"]+)['"][^>]*>/gi;
+  let m;
+  while ((m = appearRe.exec(html)) !== null) {
+    const appearId = m[1];
+    const tagMatch = m[0].match(/^<(\w+)/);
+    const elTag = tagMatch ? tagMatch[1] : 'div';
+    const safeId = appearId.replace(/"/g, '\\"');
+    const selector = `[data-framer-appear-id="${safeId}"]`;
+
+    interactions.push({
+      selector,
+      appearId,
+      tag: elTag,
+      v4_interaction: {
+        type: 'scroll',
+        trigger: 'scroll_into_view',
+        effects: [{
+          type: 'transform',
+          translateY: { from: 20, to: 0, unit: 'px' },
+          opacity: { from: 0, to: 1 },
+          easing: 'ease-out',
+          duration: 600,
+        }],
+      },
+    });
+  }
+  return interactions;
+}
+
+// ─── MAIN ───────────────────────────────────────────────────────────────────
+
+let interactions = [];
+
+if (args.html) {
+  if (!fs.existsSync(args.html)) {
+    process.stderr.write(`Error: HTML not found: ${args.html}\n`);
+    process.exit(2);
+  }
+  const html = fs.readFileSync(args.html, 'utf8');
+  const css = extractStyleBlocks(html);
+
+  interactions.push(...extractCssTransitions(css));
+  interactions.push(...extractFramerAppearInteractions(html));
+
+  log(`CSS transitions: ${extractCssTransitions(css).length}`);
+  log(`Framer appear: ${extractFramerAppearInteractions(html).length}`);
+}
+
+if (args['v4-tree']) {
+  log('V4 tree mode not yet implemented');
+}
+
+// ─── OUTPUT ─────────────────────────────────────────────────────────────────
+
+const result = {
+  meta: {
+    generatedAt: new Date().toISOString(),
+    source: args.html || args['v4-tree'],
+    totalInteractions: interactions.length,
+    post_id: args['post-id'] ? parseInt(args['post-id'], 10) : null,
+  },
+  interactions,
+  mcpRouting: {
+    ability: 'novamira-adrianv2/edit-interaction',
+    note: 'B3: Diese Ability existiert bereits. Route interactions[] via McpBridge.',
+    example: {
+      ability_name: 'novamira-adrianv2/edit-interaction',
+      parameters: {
+        post_id: '{{post_id}}',
+        element_id: '{{element_id}}',
+        interaction: '{{v4_interaction}}',
+      },
+    },
+  },
+};
+
+if (args.output) {
+  fs.mkdirSync(path.dirname(path.resolve(args.output)), { recursive: true });
+  fs.writeFileSync(args.output, JSON.stringify(result, null, 2), 'utf8');
+  process.stderr.write(`[int-extract] ${interactions.length} interactions → ${args.output}\n`);
+} else {
+  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+}
+
+process.exit(0);
