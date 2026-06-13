@@ -63,6 +63,18 @@ if (!args.xml && !args['xml-string']) {
 // XML TOKENIZER  (character-by-character, handles quoted values)
 // ─────────────────────────────────────────────
 
+/**
+ * Zerlegt einen Framer HTML/XML-String in einen Token-Strom.
+ *
+ * Arbeitet character-by-character um Attribute mit Anführungszeichen,
+ * self-closing Tags und CDATA korrekt zu behandeln.
+ *
+ * Bug 8: Ignoriert HTML-Kommentare (<!-- -->) die Framer zwischen
+ * Attributen einbettet.
+ *
+ * @param {string} xml - XML/HMTL-Rohstring (Framer getNodeXml() Output)
+ * @returns {Array<{type: 'open'|'close'|'selfclose'|'text', tagName?: string, attrs?: object, value?: string}>}
+ */
 function tokenizeXml(xml) {
   const tokens = [];
   let i = 0;
@@ -154,6 +166,15 @@ function tokenizeXml(xml) {
   return tokens;
 }
 
+/**
+ * Baut aus einem Token-Strom einen AST (Abstract Syntax Tree).
+ *
+ * Verarbeitet open/close/selfclose/text-Tokens zu einem verschachtelten
+ * Node-Baum mit tagName, attrs und children.
+ *
+ * @param {Array} tokens - Token-Strom aus tokenizeXml()
+ * @returns {Array<{tagName: string, attrs: object, children: Array, _textContent?: string}>}
+ */
 function buildTree(tokens) {
   const root = { tagName: '_root', attrs: {}, children: [] };
   const stack = [root];
@@ -183,6 +204,20 @@ function buildTree(tokens) {
 // WIDGET TYPE DETERMINATION
 // ─────────────────────────────────────────────
 
+/**
+ * Bestimmt den V4-Widget-Type für einen Framer XML-Node.
+ *
+ * Prioritätsreihenfolge:
+ *   1. C2: CSS Grid Detection (display:grid / grid-template-*) → e-div-block
+ *   2. C1: Component Preservation (componentId/componentName) → e-component
+ *   3. RC-16: Explicit Component Name Mapping (COMPONENT_TYPE_MAP)
+ *   4. SVG Native Tags → e-svg
+ *   5. Heuristisch: Button, Heading, Paragraph, Image, Container
+ *
+ * @param {object} attrs - XML-Node-Attribute (data-framer-*, class, style)
+ * @param {object} [xmlNode] - Vollständiger XML-Node (für Child-Count, tagName)
+ * @returns {string} V4-Widget-Type (e-flexbox, e-heading, e-button, etc.)
+ */
 // Native SVG tag names — these map directly to e-svg regardless of parent
 const SVG_NATIVE_TAGS = new Set([
   'svg', 'circle', 'ellipse', 'rect', 'path', 'polygon', 'polyline',
@@ -332,6 +367,18 @@ function serializeSvgNode(xmlNode) {
 
 const warnings = [];
 
+/**
+ * Löst einen CSS-Farbwert in eine V4-Color-Referenz auf.
+ *
+ * Prioritätsreihenfolge:
+ *   1. CSS-Variable → GV-Referenz via tokenMapping (wrapGvColor)
+ *   2. CSS-Variable ohne gv_id → Hex-Fallback (wrapColor)
+ *   3. Direkter Hex-Wert → Raw Color (wrapColor)
+ *
+ * @param {string|null} value - CSS-Farbwert (hex, rgb, oder var(--token))
+ * @param {object|null} tokenMapping - Token-Mapping mit gv_id Referenzen
+ * @returns {object|null} V4 Color-Prop ($$type: "color" oder "gv-color") oder null
+ */
 function resolveColor(value, tokenMapping) {
   if (!value) return null;
   const resolved = resolveCssVar(value, tokenMapping);
@@ -435,6 +482,30 @@ function detectGridLayout(xmlNode, attrs) {
   return 'repeat(auto-fit, minmax(250px, 1fr))';
 }
 
+/**
+ * Baut das V4-Style-Props-Objekt aus Framer-Attributen.
+ *
+ * Mapt CSS-Properties aus Framer-Attributen (stackDirection, backgroundColor,
+ * fontFamily, etc.) in V4 Style-Props mit korrekten $$type-Wrappern.
+ *
+ * Widget-spezifische Logik:
+ *   - e-div-block: display:grid + grid-template-columns (C2/RC-09)
+ *   - e-flexbox/e-button: display:flex + flex-direction (RC-02)
+ *   - e-heading/e-paragraph: Typografie-Properties
+ *   - e-image: width/height
+ *
+ * Bug 3: background.color wird NUR in Global Classes gesetzt, nie lokal.
+ * RC-08: position:absolute nur bei echten Overlays (mit Offset-Werten).
+ * RC-11: Sane Fallbacks für Widgets mit leeren Props (Inter, 32px, etc.).
+ *
+ * @param {object} attrs - XML-Node-Attribute
+ * @param {string} widgetType - V4-Widget-Type
+ * @param {object|null} tokenMapping - Token-Mapping (colors, fonts)
+ * @param {object|null} fontResolution - Font-Resolution
+ * @param {object|null} imageMap - Image-Map (URL → wp_media_id)
+ * @param {object|null} [xmlNode] - XML-Node (für Grid-Detection)
+ * @returns {object} V4-Style-Props
+ */
 function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageMap, xmlNode = null) {
   const props  = {};
   const { stackDirection, stackGap, padding, maxWidth, width, height,
@@ -631,10 +702,21 @@ function resolvePassThrough(xmlNode, depth) {
   return resolvePassThrough(meaningful[0], depth);
 }
 
-// ── Bug 8 Fix: Extract text from Framer Component Instance attributes ──
-// Framer components store text in dynamically-named attributes
-// (e.g. nUjzUoV6a="See how we work with you"). This heuristic scans
-// all attrs of component instances for the best text candidate.
+/**
+ * Bug 8 Fix: Extrahiert Text aus Framer Component Instance-Attributen.
+ *
+ * Framer Components speichern Text in dynamisch benannten Attributen
+ * (z.B. nUjzUoV6a="See how we work with you"). Diese Heuristik
+ * scannt alle Attribute einer Component-Instanz nach dem besten
+ * Text-Kandidaten (längster lesbarer String ohne System-Keywords).
+ *
+ * Filtert aus: System-Keys (componentId, variant, name, etc.),
+ * Style-Referenzen (uppercase-camel), URLs, numerische Werte,
+ * XML-Fragmente (RC-04 Fix).
+ *
+ * @param {object} attrs - XML-Node-Attribute
+ * @returns {string|undefined} Bester Text-Kandidat oder undefined
+ */
 function extractComponentText(attrs) {
   if (!attrs.componentId && !attrs.variant) return undefined;
 
@@ -669,6 +751,25 @@ function extractComponentText(attrs) {
   return bestText;
 }
 
+/**
+ * Konvertiert einen Framer XML-Node rekursiv in ein V4-Element.
+ *
+ * Dies ist die zentrale Konvertierungsfunktion der Pipeline. Sie:
+ *   1. Extrahiert Text aus Component-Attributen (Bug 8)
+ *   2. Bestimmt den V4-Widget-Type (determineWidgetType)
+ *   3. Generiert eindeutige Widget-ID + Style-ID
+ *   4. Baut Style-Props (buildStyleProps)
+ *   5. Setzt Settings (tag, text, link, image, svg-icon, component-id)
+ *   6. Erstellt Style-Varianten (desktop-Breakpoint)
+ *   7. Rekursiert in Kinder (mit Bug-3 Pass-Through-Flattening)
+ *
+ * @param {object} xmlNode - XML-Node aus buildTree()
+ * @param {object|null} tokenMapping - Token-Mapping (colors, fonts)
+ * @param {object|null} fontResolution - Font-Resolution
+ * @param {object|null} imageMap - Image-Map (URL → wp_media_id)
+ * @param {number} [depth=0] - Rekursionstiefe
+ * @returns {object} V4-Element mit type, elType, widgetType, id, settings, styles, elements
+ */
 function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0) {
   const { attrs } = xmlNode;
   // Bug 1+8 Fix: resolve text from component attrs > explicit text attr > child text
@@ -826,6 +927,20 @@ function findGvIdForFont(family, tokenMapping) {
   return null;
 }
 
+/**
+ * C6: Substituiert Hardcoded-Hex/Fonts mit e-gv-XXXXXXXX Referenzen.
+ *
+ * Läuft NACH convertNode() über den gesamten V4-Tree und ersetzt
+ * alle $$type:"color"-Hex-Werte und $$type:"string"-Font-Namen
+ * durch GV-Referenzen aus token-mapping.json.
+ *
+ * Root-Cause Fix: Statt Hex-Werte im Nachhinein zu patchen, werden
+ * sie direkt durch die entsprechenden Global-Variable-IDs ersetzt.
+ *
+ * @param {object|Array} tree - V4-Tree (einzelner Node oder Array)
+ * @param {object|null} tokenMapping - Token-Mapping mit gv_ids
+ * @returns {{ tree: object|Array, substitutions: number }}
+ */
 function substituteTokensWithGvIds(tree, tokenMapping) {
   if (!tokenMapping) return { tree, substitutions: 0 };
   let substitutions = 0;
@@ -880,6 +995,19 @@ function substituteTokensWithGvIds(tree, tokenMapping) {
 // RC-13: TOKEN USAGE ANALYZER
 // ─────────────────────────────────────────────
 
+/**
+ * RC-13: Analysiert den V4-Tree auf Hardcoded-Token-Nutzung.
+ *
+ * Erstellt einen detaillierten Report über:
+ *   - Hardcoded Colors (Hex-Werte ohne GV-Referenz)
+ *   - Hardcoded Fonts (Families ohne GV-Referenz)
+ *   - Hardcoded Sizes (px-Werte die Token-Kandidaten sind)
+ *
+ * Generiert priorisierte Suggestions (high/medium) zur Token-Erstellung.
+ *
+ * @param {object|Array} treeNodes - V4-Tree
+ * @returns {object} Token-Usage-Report mit summary, suggestions, hardcoded_*
+ */
 function analyzeTokenUsage(treeNodes) {
   const report = {
     hardcoded_colors: new Map(),

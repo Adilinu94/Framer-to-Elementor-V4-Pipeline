@@ -174,10 +174,11 @@ export class McpBridge {
 
   /**
    * @param {object} options
-   * @param {string} options.mcpUrl       URL zum MCP-Endpoint (z.B. http://solar.local/wp-json/mcp/novamira)
-   * @param {string} [options.authHeader] Authorization-Header (Basic <b64> oder Bearer <token>)
-   * @param {string} [options.wpUrl]      WordPress Base-URL für REST-Fallback
+   * @param {string} options.mcpUrl         URL zum MCP-Endpoint (z.B. http://solar.local/wp-json/mcp/novamira)
+   * @param {string} [options.authHeader]   Authorization-Header (Basic <b64> oder Bearer <token>)
+   * @param {string} [options.wpUrl]        WordPress Base-URL für REST-Fallback
    * @param {number} [options.timeout=120000] Timeout pro Request in ms
+   * @param {number} [options.concurrency=3]  Max parallele Calls (MCP_CONCURRENCY env var)
    * @param {boolean} [options.verbose=false] Debug-Logging aktivieren
    */
   constructor(options = {}) {
@@ -186,6 +187,11 @@ export class McpBridge {
     this.wpUrl        = options.wpUrl || '';
     this.timeout      = options.timeout || 120000;
     this.verbose      = options.verbose || false;
+
+    // FIX-7: Concurrency-Limit für callParallel()
+    // Default: 3. Überschreibbar via Option oder MCP_CONCURRENCY env var.
+    this.defaultConcurrency = options.concurrency
+      || parseInt(process.env.MCP_CONCURRENCY || '3', 10);
 
     // Session-Management
     this._sessionId    = null;
@@ -557,28 +563,68 @@ export class McpBridge {
   }
 
   /**
-   * Führt mehrere MCP-Calls parallel aus via Promise.allSettled.
-   * Alle Calls laufen gleichzeitig — Ergebnisreihenfolge entspricht Input-Reihenfolge.
-   * Fehler einzelner Calls werfen nicht — sie landen als { status: 'rejected', reason } im Ergebnis.
+   * Führt mehrere MCP-Calls mit konfigurierbarem Concurrency-Limit parallel aus.
+   *
+   * Alle Calls laufen parallel, aber maximal `concurrency` Calls sind
+   * gleichzeitig aktiv. Dies verhindert Race-Conditions und PHP-Timeout
+   * bei lokalen WordPress-Instanzen ohne Load-Balancer (FIX-7).
+   *
+   * Ohne Concurrency-Limit feuert Promise.allSettled ALLE Calls simultan —
+   * bei 10+ Requests gegen solar.local kann das zu PHP max_execution_time-
+   * Abbrüchen oder Session-Timeout führen.
+   *
+   * Der interne Worker-Pool verwendet kein externes Package (p-limit) —
+   * die Concurrency-Steuerung ist mit ~20 Zeilen selbst implementiert.
    *
    * Nutze callParallel() für unabhängige Pre-Build-Schritte (z.B. parallel-pre-build.js).
    * Nutze callSequence() wenn Calls voneinander abhängen oder serielle Ausführung nötig ist.
    *
    * @param {Array<{ability: string, params?: object}>} calls
+   * @param {object} [options]
+   * @param {number} [options.concurrency=3]  Maximale Anzahl paralleler Calls
    * @returns {Promise<Array<{status: 'fulfilled'|'rejected', value?: any, reason?: any, ability: string}>>}
    */
-  async callParallel(calls) {
+  async callParallel(calls, options = {}) {
     if (!Array.isArray(calls) || calls.length === 0) return [];
-    process.stderr.write(`[mcp-bridge] callParallel: ${calls.length} calls gestartet\n`);
-    const start = Date.now();
-    const settled = await Promise.allSettled(
-      calls.map(({ ability, params = {} }) => this.call(ability, params))
+
+    const concurrency = Math.max(1, options.concurrency ?? this.defaultConcurrency ?? 3);
+
+    process.stderr.write(
+      `[mcp-bridge] callParallel: ${calls.length} calls gestartet (concurrency=${concurrency})\n`
     );
+
+    const start = Date.now();
+    const results = new Array(calls.length);
+    let cursor = 0;
+
+    // Worker: greift den nächsten Call aus der Queue und führt ihn aus
+    const worker = async () => {
+      while (cursor < calls.length) {
+        const idx = cursor++;
+        const { ability, params = {} } = calls[idx];
+        try {
+          const value = await this.call(ability, params);
+          results[idx] = { status: 'fulfilled', value, ability };
+        } catch (reason) {
+          results[idx] = { status: 'rejected', reason, ability };
+        }
+      }
+    };
+
+    // Starte `concurrency` Worker parallel
+    const workers = Array.from(
+      { length: Math.min(concurrency, calls.length) },
+      () => worker()
+    );
+    await Promise.all(workers);
+
     const ms = Date.now() - start;
-    const failed = settled.filter(r => r.status === 'rejected').length;
-    process.stderr.write(`[mcp-bridge] callParallel: fertig in ${ms}ms (${calls.length - failed} ok, ${failed} fehler)\n`);
-    // Reichere Ergebnisse mit ability-Name an
-    return settled.map((result, i) => ({ ...result, ability: calls[i].ability }));
+    const failed = results.filter(r => r.status === 'rejected').length;
+    process.stderr.write(
+      `[mcp-bridge] callParallel: fertig in ${ms}ms ` +
+      `(${calls.length - failed} ok, ${failed} fehler, concurrency=${concurrency})\n`
+    );
+    return results;
   }
 
   // ── Spezialisierte Methoden ──────────────────────────────────────────────

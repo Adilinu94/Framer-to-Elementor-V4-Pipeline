@@ -50,6 +50,7 @@
     "extract-components": "node scripts/extract-framer-components.js",
     "extract-interactions": "node scripts/extract-framer-interactions.js",
     "extract-forms": "node scripts/extract-framer-forms.js",
+    "extract-dark-mode": "node scripts/extract-framer-dark-mode.js",
     "extract-animations": "node scripts/framer-animation-extractor.js",
     "auto-fix": "node scripts/post-build-auto-fix.js",
     "inject-code": "node scripts/inject-animation-code.js",

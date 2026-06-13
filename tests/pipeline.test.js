@@ -1363,3 +1363,84 @@ describe('A2: v4-tree Mode (ENH-9)', () => {
     assert.strictEqual(plan.interactions.length, 0);
   });
 });
+
+// ─── Suite 25: FIX-7 — callParallel() p-limit (ENH-10) ────────────────────
+
+describe('FIX-7: callParallel() p-limit', () => {
+  test('FIX-7: McpBridge.defaultConcurrency is 3', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    const bridge = new McpBridge({ mcpUrl: 'http://localhost:9999' });
+    assert.equal(bridge.defaultConcurrency, 3,
+      `Default concurrency should be 3, got ${bridge.defaultConcurrency}`);
+  });
+
+  test('FIX-7: McpBridge respects constructor concurrency option', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    const bridge = new McpBridge({ mcpUrl: 'http://localhost:9999', concurrency: 5 });
+    assert.equal(bridge.defaultConcurrency, 5,
+      `Constructor concurrency should override default, got ${bridge.defaultConcurrency}`);
+  });
+});
+
+// ─── Suite 26: ENH-10 — Dark Mode Extraction ──────────────────────────────
+
+describe('ENH-10: Dark Mode Extraction', () => {
+  test('ENH-10: extracts dark mode color overrides from CSS', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      body { background: #ffffff; color: #111111; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #1a1a2e; color: #e0e0e0; }
+        .card { background: #16213e; }
+      }
+    </style></head><body><div class="card"></div></body></html>`;
+    const htmlFile = tmpFile('s26-dark.html', html);
+    const outFile = tmpFile('s26-dark-out.json');
+    run('extract-framer-dark-mode.js', ['--html', htmlFile, '--output', outFile]);
+    const result = readJson(outFile);
+    assert.ok(result.variables.length >= 2,
+      `Expected >=2 variables, got ${result.variables.length}`);
+    assert.equal(result.mode, 'dark');
+    const bodyBg = result.variables.find(v => v.selector === 'body' && v.property === 'background');
+    assert.ok(bodyBg, 'Has body background override');
+    assert.strictEqual(bodyBg.dark_hex, '#1a1a2e');
+  });
+
+  test('ENH-10: no dark mode blocks → empty output with note', () => {
+    const html = `<!DOCTYPE html><html><head><style>
+      body { background: #ffffff; }
+    </style></head><body><div></div></body></html>`;
+    const htmlFile = tmpFile('s26-nodark.html', html);
+    const outFile = tmpFile('s26-nodark-out.json');
+    run('extract-framer-dark-mode.js', ['--html', htmlFile, '--output', outFile]);
+    const result = readJson(outFile);
+    assert.strictEqual(result.variables.length, 0);
+    assert.ok(result.summary.note.includes('No @media'));
+    assert.equal(result.mode, 'dark');
+  });
+});
+
+// ─── Suite 27: ENH-11 — convert-xml-to-v4.js JSDoc ─────────────────────────
+
+describe('ENH-11: convert-xml-to-v4.js JSDoc', () => {
+  test('ENH-11: JSDoc does not break XML conversion (regression)', () => {
+    const xml = `<Frame name="Hero"><Text name="H1" font-size="48px">Hello</Text></Frame>`;
+    const xmlFile = tmpFile('s27-hero.xml', xml);
+    const outFile = tmpFile('s27-hero-v4.json');
+    run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
+    const tree = readJson(outFile);
+    assert.ok(tree.widgetType, 'Tree has widgetType');
+    const hero = tree.widgetType === 'e-flexbox' ? tree : tree;
+    assert.ok(hero.widgetType, 'Has widgetType after JSDoc additions');
+  });
+
+  test('ENH-11: buildV4Element produces valid V4 element via convertNode', () => {
+    const xml = `<Image name="Logo" src="logo.png" alt="Logo" width="200px" height="60px"/>`;
+    const xmlFile = tmpFile('s27-img.xml', xml);
+    const outFile = tmpFile('s27-img-v4.json');
+    run('convert-xml-to-v4.js', ['--xml', xmlFile, '--output', outFile]);
+    const tree = readJson(outFile);
+    assert.equal(tree.widgetType, 'e-image', 'Image XML should become e-image');
+    assert.ok(tree.id, 'Has unique widget id');
+    assert.ok(tree.settings?.image, 'Has image settings');
+  });
+});
