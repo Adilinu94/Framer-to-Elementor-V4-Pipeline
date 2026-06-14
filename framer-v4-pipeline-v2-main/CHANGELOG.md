@@ -1,5 +1,26 @@
 # Changelog — framer-v4-pipeline-v2
 
+## [v0.15.0] — 2026-06-14
+
+### Sprint 9 Complete — Pipeline Hardening & Plugin Fixes
+
+- **ENH-16 FramerExport CLI**: Wizard --non-interactive, spawnWithRetry shell:true, S14 E2E
+- **Schema-Sync REST Endpoint**: GET /novamira/v1/prop-schema + V4_Props::get_schema() (12 types, 13 props)
+- **UV_HANDLE_CLOSING Fix**: undici dispatcher destroy + process.exitCode (statt process.exit)
+- **WCAG 2.2 Threshold**: 0.03928→0.04045 in V4_Color_Contrast (aligns with spec + V4_Color_Contrast_22)
+- **Contrast Ratio Test**: #949494→#959595 (WCAG threshold 0.04045 gives 3.03 for old color)
+- **Extraction Exit Codes**: 4 scripts exit 0 for non-critical results (no URLs, missing fonts, unknown BPs, unmapped tokens)
+- **Windows Path Fix**: fileURLToPath prevents C:\C:\ double-prefix
+- **PHPUnit Infrastructure**: Composer + php.ini + WP mock functions (52 tests, 145 assertions)
+- **V4PropsSchemaTest**: 31 tests for get_schema() REST endpoint schema
+- **Docs**: .planning/STATE.md, ROADMAP.md updated, PR #1 (sprint-9-fixes → master)
+
+### Test-Status
+- npm test → 114/114 ✅
+- npm run test:e2e → 18/18 ✅
+- PHPUnit → 52/52 ✅ (145 assertions)
+- Total: 184 tests, 100% passing
+
 ## [v0.14.0] — 2026-06-14
 
 ### Sprint 9 — ENH-16: FramerExport CLI Integration
