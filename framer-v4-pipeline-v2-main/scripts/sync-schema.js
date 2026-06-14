@@ -34,6 +34,7 @@
 import { parseArgs } from 'node:util';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { McpClient } from './lib/mcp-client.js';
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -79,7 +80,7 @@ const fatal = (m, c = 1) => { process.stderr.write('[sync-schema] FATAL: ' + m +
 const WP_BASE_URL  = args.url || process.env.WP_API_URL || '';
 const OUTPUT_PATH  = args.output
   ? resolve(args.output)
-  : resolve(dirname(new URL(import.meta.url).pathname), '..', 'schemas', 'v4-prop-type-schema.json');
+  : resolve(dirname(fileURLToPath(import.meta.url)), '..', 'schemas', 'v4-prop-type-schema.json');
 const TIMEOUT_MS   = parseInt(args.timeout, 10);
 const API_PATH     = '/wp-json/novamira/v1/prop-schema';
 
