@@ -106,14 +106,16 @@ class V4ColorContrast22Test extends TestCase
 
     public function test_passes_focus_appearance_barely_fails(): void
     {
-        // #949494 on #ffffff → ~2.8:1 < 3:1
-        $ratio = V4_Color_Contrast_22::contrast_ratio('#949494', '#ffffff');
+        // #959595 on #ffffff → ~2.995:1 < 3:1 (WCAG relative luminance threshold 0.04045)
+        // L = 0.3006, ratio = 1.05 / 0.3506 ≈ 2.995
+        // The old test color #949494 gives ~3.03:1 which actually PASSES 3:1.
+        $ratio = V4_Color_Contrast_22::contrast_ratio('#959595', '#ffffff');
         $this->assertLessThan(3.0, $ratio,
-            "Expected contrast ratio < 3.0 for #949494 on #fff, got {$ratio}");
+            "Expected contrast ratio < 3.0 for #959595 on #fff, got {$ratio}");
 
         $this->assertFalse(
-            V4_Color_Contrast_22::passes_focus_appearance('#949494', '#ffffff'),
-            '#949494 on #ffffff (~2.8:1) should fail 3:1'
+            V4_Color_Contrast_22::passes_focus_appearance('#959595', '#ffffff'),
+            '#959595 on #ffffff (~2.995:1) should fail 3:1'
         );
     }
 
