@@ -24,7 +24,7 @@ const __dirname  = path.dirname(__filename);
 import {
   normalizeHex, resolveCssVar, generateStyleId,
   wrapSize, wrapUnitless, wrapDimensions, wrapBorderRadius, wrapGvColor, wrapGvFont,
-  wrapColor, wrapType, wrapImageSrc, isDimensionValue, wrapImage, wrapHtmlContent,
+  wrapColor, wrapType, wrapImageSrc, isDimensionValue, wrapImage, wrapHtmlContent, wrapBackground,
 } from './lib/framer-utils.js';
 
 // ─────────────────────────────────────────────
@@ -458,9 +458,15 @@ function resolveImageSrc(bgImageAttr, imageMap) {
 function resolveLineHeight(lineHeight) {
   if (!lineHeight) return null;
   const raw = String(lineHeight).trim();
+  // Bug 6 Fix: line-height immer mit unit:'custom', nie 'px'
   if (/^-?[\d.]+$/.test(raw)) return wrapUnitless(raw);
   if (/^-?[\d.]+%$/.test(raw)) return wrapUnitless(parseFloat(raw) / 100);
-  return wrapSize(raw);
+  // px-Werte: Groesse uebernehmen, aber unit:'custom' (keine px unit)
+  const pxMatch = raw.match(/^(-?[\d.]+)px$/);
+  if (pxMatch) return wrapUnitless(parseFloat(pxMatch[1]));
+  // Fallback: unbekanntes Format — warnen
+  warn(`resolveLineHeight: unbekanntes Format '${raw}' — parseFloat als custom verwendet.`);
+  return { '$$type': 'size', value: { size: parseFloat(raw) || 0, unit: 'custom' } };
 }
 
 // ─────────────────────────────────────────────
@@ -514,7 +520,8 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
           position, top, right, bottom, left,
           color, 'font-family': fontFamily, 'font-size': fontSize,
           'font-weight': fontWeight, 'line-height': lineHeight,
-          'letter-spacing': letterSpacing, opacity } = attrs;
+          'letter-spacing': letterSpacing, opacity,
+          inlineTextStyle } = attrs;  // Bug 8 Fix: inlineTextStyle gelesen
 
   // ── Layout (flexbox / grid) ──
   if (widgetType === 'e-div-block') {
@@ -537,7 +544,8 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
     if (bgVal) {
       const resolved = resolveColor(bgVal, tokenMapping);
       if (resolved) {
-        warn(`background.color '${bgVal}' muss als Global Class gesetzt werden (Bug 3). \u00dcbersprungen.`);
+        // Bug 3 Fix: background als Objekt-Format emittieren (nicht skippen)
+        props['background'] = wrapBackground(resolved);
       }
     }
   }
@@ -559,10 +567,10 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
 
     const bgVal = backgroundColor || bgColor;
     if (bgVal) {
-      // Bug 3: background.color NUR in Global Classes, nie in lokalen Styles
       const resolved = resolveColor(bgVal, tokenMapping);
       if (resolved) {
-        warn(`background.color '${bgVal}' muss als Global Class gesetzt werden (Bug 3). Übersprungen.`);
+        // Bug 3 Fix: background als Objekt-Format emittieren (nicht skippen)
+        props['background'] = wrapBackground(resolved);
       }
     }
   }
@@ -620,21 +628,36 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
   // RC-11 Fix: Minimum default styles for widgets with empty props.
   // Widgets with {} props render with browser defaults (Times New Roman, no sizing).
   // Set sane fallbacks that match typical Framer designs.
+  // Bug 8/RC-11 Fix: Wenn inlineTextStyle gesetzt ist, KEINE Fallbacks anwenden —
+  // die Style-Referenz wird in Phase 2 (Dual-Source) aufgeloest.
   if (Object.keys(props).length === 0) {
-    if (widgetType === 'e-heading') {
-      props['font-family'] = wrapType('string', 'Inter');
-      props['font-size'] = wrapSize('32px');
-      props['font-weight'] = wrapType('string', '600');
-      props['color'] = wrapColor('#111111');
-    } else if (widgetType === 'e-paragraph') {
-      props['font-family'] = wrapType('string', 'Inter');
-      props['font-size'] = wrapSize('16px');
-      props['line-height'] = wrapUnitless(1.6);
-      props['color'] = wrapColor('#444444');
-    } else if (widgetType === 'e-button') {
-      props['color'] = wrapColor('#ffffff');
+    if (inlineTextStyle) {
+      warn(`inlineTextStyle='${inlineTextStyle}' gefunden aber nicht aufgeloest (Phase 2 Dual-Source benoetigt). Keine RC-11 Fallbacks gesetzt.`);
+    } else {
+      if (widgetType === 'e-heading') {
+        warn('RC-11 Fallback: e-heading ohne inlineTextStyle — Inter/32px/#111 gesetzt.');
+        props['font-family'] = wrapType('string', 'Inter');
+        props['font-size'] = wrapSize('32px');
+        props['font-weight'] = wrapType('string', '600');
+        props['color'] = wrapColor('#111111');
+      } else if (widgetType === 'e-paragraph') {
+        warn('RC-11 Fallback: e-paragraph ohne inlineTextStyle — Inter/16px/#444 gesetzt.');
+        props['font-family'] = wrapType('string', 'Inter');
+        props['font-size'] = wrapSize('16px');
+        props['line-height'] = wrapUnitless(1.6);
+        props['color'] = wrapColor('#444444');
+      } else if (widgetType === 'e-button') {
+        warn('RC-11 Fallback: e-button ohne inlineTextStyle — #fff gesetzt.');
+        props['color'] = wrapColor('#ffffff');
+      }
     }
   }
+
+  // Bug 7 Fix: Browser-Defaults skippen (font-weight:400, font-style:normal, etc.)
+  if (props['font-weight']?.value === '400') delete props['font-weight'];
+  if (props['font-style']?.value === 'normal') delete props['font-style'];
+  if (props['text-decoration']?.value === 'none') delete props['text-decoration'];
+  if (props['text-transform']?.value === 'none') delete props['text-transform'];
 
   return props;
 }
@@ -857,7 +880,7 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
 
   // ── Style variants (VERBOSE format: id/type/label required by elementor-set-content) ──
   const baseVariant = {
-    meta:  { breakpoint: 'desktop', state: null },
+    meta:  { breakpoint: null, state: null },  // Bug 4 Fix: desktop → null
     props: Object.keys(props).length > 0 ? props : {},
     custom_css: null,
   };

@@ -11,6 +11,48 @@ tags: [elementor, v4, atomic, novamira, adrianv2, mcp, build]
 
 # Elementor V4 Build — Ground Truth
 
+## 🔵 PRE-FLIGHT: Vor jedem Build
+
+### Skills laden
+
+Vor jedem Build diese Skills aktivieren:
+- `style-props-quickref` — $$type Wrapper-Format + Style-Property-Referenz
+- `dual-source-workflow` — Unframer MCP (Struktur) + FramerExport (CSS) kombinieren
+- `design-token-protocol` — Design Tokens aus FramerExport extrahieren
+
+### CSS aus FramerExport extrahieren (wenn ZIP vorhanden)
+
+```python
+# Python-Snippet zum Extrahieren von CSS aus Framer-Export-ZIP:
+import zipfile, re
+with zipfile.ZipFile("framer-export.zip") as zf:
+    for name in zf.namelist():
+        if name.endswith(".html"):
+            html = zf.read(name).decode()
+            css_vars = re.findall(r'--([a-zA-Z0-9-]+):\s*([^;]+)', html)
+            for var, val in css_vars:
+                print(f"  --{var}: {val}")
+```
+
+### 12-Guard Pre-Flight Checkliste
+
+| # | Guard | Regel |
+|---|-------|-------|
+| G1 | `classes` immer mit `$$type: "classes"` | `{ "$$type": "classes", "value": ["gc-xxx"] }` |
+| G2 | `background-color` NIE lokal — nur `background` | `background-color` in lokalen Styles = rejected |
+| G3 | `background` als Objekt, nicht String | `{ "$$type": "background", "value": { "color": {...} } }` |
+| G4 | `font-size`, `font-family`, `color` NUR in `styles` | NIEMALS in `settings` (Invariant II) |
+| G5 | Breakpoint `"desktop"` → `null` | `"meta": { "breakpoint": null, "state": null }` |
+| G6 | `border-radius` als 4-Ecken-Objekt | `{ "top-left": {...}, "top-right": {...}, "bottom-right": {...}, "bottom-left": {...} }` |
+| G7 | `line-height` als `custom` (nicht `px`) | `{ "$$type": "size", "value": { "size": 1.2, "unit": "custom" } }` |
+| G8 | `margin: auto` als `{ "$$type": "string", "value": "auto" }` | Nicht als size-Objekt |
+| G9 | Style-IDs ohne Hyphens (Invariant III) | `shero` nicht `s-hero` |
+| G10 | Image: `url`-Key komplett weglassen wenn `id` gesetzt | Kein `url:null` (Invariant IV) |
+| G11 | GV-Farben als `e-gv-*` Referenz, nicht Hardcode | `{ "$$type": "variable", "value": "e-gv-abc123" }` |
+| G12 | Keine Browser-Defaults als explizite Props senden | `font-weight: 400`, `font-style: normal` skippen |
+
+---
+
 ## Ground Truth fuer solar.local
 
 **Alle `novamira/adrians-*` Ability-Namen existieren NICHT mehr.**
@@ -64,6 +106,68 @@ Brauche ich vertikalen Stack mit konsistentem Abstand?
 > **Kritisch:** `setup-v4-foundation` NIEMALS cachen. GV-IDs und GC-IDs sind
 > session-live und koennen sich zwischen Calls aendern. Immer frisch abrufen.
 
+## Styling-Standards (korrekte JSON-Formate)
+
+### `background` (als Objekt — nicht als String)
+
+```json
+{
+  "background": {
+    "$$type": "background",
+    "value": {
+      "color": { "$$type": "color", "value": "#0a6638" }
+    }
+  }
+}
+```
+
+### `padding` / `margin` (als dimensions-Objekt)
+
+```json
+{
+  "padding": {
+    "$$type": "dimensions",
+    "value": {
+      "block-start": { "$$type": "size", "value": { "size": 80, "unit": "px" } },
+      "block-end": { "$$type": "size", "value": { "size": 80, "unit": "px" } },
+      "inline-start": { "$$type": "size", "value": { "size": 24, "unit": "px" } },
+      "inline-end": { "$$type": "size", "value": { "size": 24, "unit": "px" } }
+    }
+  }
+}
+```
+
+### `margin: auto` (Zentrierung)
+
+```json
+{
+  "margin": {
+    "$$type": "dimensions",
+    "value": {
+      "block-start": { "$$type": "string", "value": "auto" },
+      "block-end": { "$$type": "string", "value": "auto" },
+      "inline-start": { "$$type": "string", "value": "auto" },
+      "inline-end": { "$$type": "string", "value": "auto" }
+    }
+  }
+}
+```
+
+### Floating Header over Hero (Negative Margin)
+
+```json
+{
+  "margin": {
+    "$$type": "dimensions",
+    "value": {
+      "block-start": { "$$type": "size", "value": { "size": -100, "unit": "px" } }
+    }
+  }
+}
+```
+
+---
+
 ## V4 Atomic Widget-Tree Struktur
 
 ```json
@@ -79,7 +183,7 @@ Brauche ich vertikalen Stack mit konsistentem Abstand?
     "shero": {
       "type": "class",
       "variants": [{
-        "meta": { "breakpoint": "desktop", "state": null },
+        "meta": { "breakpoint": null, "state": null },
         "props": {
           "padding": { "$$type": "dimensions", "value": { "block-start": {...}, "block-end": {...} } }
         }
@@ -222,6 +326,26 @@ Brauche ich vertikalen Stack mit konsistentem Abstand?
 | `novamira-adrianv2/html-to-elementor-widget-plan` | HTML -> V4 Widget-Plan |
 | `novamira-adrianv2/kit-convert-v3-to-v4` | V3-Kit nach V4 konvertieren |
 | `novamira-adrianv2/batch-get-content` | Mehrere Posts auf einmal (mode:"skeleton") |
+
+## 🔵 POST-FLIGHT: Nach jedem Build
+
+### Verifikations-Gate (alle müssen PASS sein)
+
+```
+1. elementor-get-content → Struktur intakt, keine leeren Container
+2. layout-audit → keine Pass-through, DOM-Tiefe ≤ 3
+3. visual-qa → kein Overflow, keine Z-Index-Konflikte
+4. responsive-audit → alle Breakpoints vorhanden
+5. Design-Evaluate → Screenshot-Vergleich (wenn agent-browser verfügbar)
+```
+
+### Tweaks (kein Tree-Rebuild!)
+
+```
+Tool: novamira-adrianv2/patch-element-styles
+Fuer: Einzelne Style-Korrekturen
+Nicht: Kompletten Tree neu bauen
+```
 
 ## Fehlerbehebung
 

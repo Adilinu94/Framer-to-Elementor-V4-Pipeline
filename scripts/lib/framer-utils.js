@@ -170,25 +170,32 @@ export function wrapDimensions(shorthand) {
   };
 }
 
-/** "12px" / "12px 8px" → V4 four-corner border-radius object */
+/** "12px" / "12px 8px" → V4 four-corner border-radius object.
+ * Bug 5 Fix: physische Ecknamen (top-left, top-right, bottom-right, bottom-left)
+ * statt logischer Properties (start-start etc.) die Elementor V4 nicht akzeptiert. */
 export function wrapBorderRadius(shorthand) {
   const p = String(shorthand).trim().split(/\s+/);
-  let [ss, se, ee, es] = ['0px', '0px', '0px', '0px'];
+  let [tl, tr, br, bl] = ['0px', '0px', '0px', '0px'];
   switch (p.length) {
-    case 1: ss = se = ee = es = p[0]; break;
-    case 2: ss = ee = p[0]; se = es = p[1]; break;
-    case 3: ss = p[0]; se = es = p[1]; ee = p[2]; break;
-    case 4: [ss, se, ee, es] = p; break;
+    case 1: tl = tr = br = bl = p[0]; break;
+    case 2: tl = br = p[0]; tr = bl = p[1]; break;
+    case 3: tl = p[0]; tr = bl = p[1]; br = p[2]; break;
+    case 4: [tl, tr, br, bl] = p; break;
   }
   return {
     '$$type': 'border-radius',
     value: {
-      'start-start': wrapSize(ss),
-      'start-end':   wrapSize(se),
-      'end-end':     wrapSize(ee),
-      'end-start':   wrapSize(es),
+      'top-left':     wrapSize(tl),
+      'top-right':    wrapSize(tr),
+      'bottom-right': wrapSize(br),
+      'bottom-left':  wrapSize(bl),
     },
   };
+}
+
+/** Bug 3 Fix: V4 background-Objekt (color im value-Objekt, nicht als String). */
+export function wrapBackground(colorProp) {
+  return { '$$type': 'background', value: { color: colorProp } };
 }
 
 export function wrapColor(hex)    { return { '$$type': 'color',                 value: hex   }; }

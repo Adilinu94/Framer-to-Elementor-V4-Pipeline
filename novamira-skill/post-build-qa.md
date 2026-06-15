@@ -25,6 +25,73 @@ gilt als abgeschlossen ohne vollständige QA. Die QA-Kette ist Pflicht, nicht op
 
 ---
 
+## 🔵 Browser-basierte QA (agent-browser, empfohlen)
+
+Zusätzlich zu den Server-seitigen Checks: Browser-Automation mit `agent-browser`.
+
+### Voraussetzungen
+- `agent-browser` global installiert: `npm install -g agent-browser`
+- Chrome installiert
+- Frontend-URL öffentlich erreichbar
+
+### Desktop/Mobile Screenshots
+
+```
+agent-browser snapshot --url https://test4.nick-webdesign.de/?p=POST_ID --device desktop
+agent-browser snapshot --url https://test4.nick-webdesign.de/?p=POST_ID --device mobile
+```
+
+### Accessibility Tree prüfen
+
+```
+agent-browser snapshot --url https://test4.nick-webdesign.de/?p=POST_ID --a11y
+```
+
+Prüft: Heading-Hierarchie, Alt-Texte, ARIA-Labels, Form-Labels.
+
+### Design-Referenz (vor dem Build)
+
+```
+agent-browser screenshot --url https://client.framer.app/ --output framer-reference.png
+```
+
+### Regression Testing (V3 → V4)
+
+```
+agent-browser compare \
+  --before https://oldsite.com/page \
+  --after https://newsite.com/page \
+  --output diff-report.html
+```
+
+### Responsive Audit (Browser)
+
+```
+agent-browser responsive --url https://test4.nick-webdesign.de/?p=POST_ID \
+  --breakpoints 1920,1440,1024,768,480,375
+```
+
+Prüft: Layout-Umbruch, Font-Größen, Padding-Anpassungen, kein Horizontal-Scroll.
+
+### Functional Testing
+
+| Test | Befehl |
+|------|--------|
+| Link-Check | `agent-browser links --url URL --check-broken` |
+| Form-Submit | `agent-browser submit --url URL --form '#contact-form' --data '{"name":"Test"}'` |
+| Navigation | `agent-browser click --url URL --selector 'nav a' --screenshot` |
+| Cookie-Banner | `agent-browser click --url URL --selector '.cookie-accept'` |
+
+### Asset-Verifikation
+
+| Check | Was |
+|-------|-----|
+| Bilder geladen | Console: keine 404 für Bild-URLs |
+| Fonts geladen | Console: keine CORS/CSP-Fehler für Font-Dateien |
+| Keine Console-Errors | `agent-browser console --url URL` → 0 Errors |
+
+---
+
 ## 7-Schritt QA-Reihenfolge
 
 ```
@@ -34,9 +101,10 @@ Build fertig
     ├── 2. novamira-adrianv2/visual-qa         (Server, Pflicht)
     ├── 3. novamira-adrianv2/responsive-audit  (Server, Pflicht)
     ├── 4. novamira-adrianv2/variable-audit    (Server, empfohlen)
-    ├── 5. visual-qa.js              (Browser, empfohlen)
-    ├── 6. section-compare.js        (Browser, optional)
-    └── 7. post-build-auto-fix.js    (Konsolidierung + Auto-Patch)
+    ├── 5. elementor-get-content (skeleton)    (Server, Verifikation)
+    ├── 6. visual-qa.js / agent-browser        (Browser, empfohlen)
+    ├── 7. section-compare.js                  (Browser, optional)
+    └── 8. post-build-auto-fix.js              (Konsolidierung + Auto-Patch)
 ```
 
 ---

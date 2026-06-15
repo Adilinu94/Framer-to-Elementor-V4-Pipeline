@@ -2,12 +2,31 @@
 slug: session-start-checklist
 title: Session-Start Checkliste
 description: Pflicht-Checkliste für den Beginn jeder Claude Desktop Session mit Novamira MCP. Definiert welche Checks, Calls und Verifikationen vor dem ersten Pipeline-Schritt durchgeführt werden müssen. Verhindert stale Session IDs, fehlende MCP-Verbindungen und falsche GV/GC-Referenzen.
-version: "0.7.0"
-pipeline_min_version: "0.7.0"
+version: "0.8.0"
+pipeline_min_version: "0.8.0"
 tags: [session, checklist, mcp, preflight, solar-local, setup]
 ---
 
 # Session-Start Checkliste
+
+## 🔵 Registrierte Skills (Phase 1)
+
+| Skill | Datei | Wann laden |
+|-------|-------|------------|
+| `elementor-v4-build` | `elementor-v4-build.md` | Immer (Ground Truth) |
+| `post-build-qa` | `post-build-qa.md` | Nach jedem Build |
+| `framer-pipeline-debug` | `framer-pipeline-debug.md` | Bei Fehlern |
+| `session-start-checklist` | `session-start-checklist.md` | Immer (Session-Start) |
+| `animation-workflow` | `animation-workflow.md` | Bei GSAP/Animation |
+| `font-workflow` | `font-workflow.md` | Bei Font-Upload |
+| `framer-v4-pipeline` | `framer-v4-pipeline.md` | Bei Framer→V4 Build |
+| 🆕 `style-props-quickref` | `style-props-quickref.md` | Vor jedem Build ($$type Wrapper) |
+| 🆕 `design-token-protocol` | `design-token-protocol.md` | Bei FramerExport CSS-Extraktion |
+| 🆕 `dual-source-workflow` | `dual-source-workflow.md` | Bei Framer→V4 (Struktur+CSS) |
+| 🆕 `responsive-extractor` | `responsive-extractor.md` | Bei responsive Breakpoints |
+| 🆕 `token-validator` | `token-validator.md` | Nach Token-Mapping |
+
+> 🆕 = Neu aus ki-2-elementor übernommen (Phase 1)
 
 ## Wann diesen Skill verwenden
 IMMER am Beginn einer neuen Claude Desktop Session, bevor irgendein Pipeline-Script,

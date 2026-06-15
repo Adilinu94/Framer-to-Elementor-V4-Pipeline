@@ -9,6 +9,21 @@ tags: [debug, troubleshooting, framer, pipeline, mcp, ci]
 
 # Framer Pipeline Debug — Guided Troubleshooting
 
+## 🔵 Quick Diagnosis (Symptom → Ursache → Fix)
+
+| Symptom | Wahrscheinliche Ursache | Sprung zu |
+|---------|------------------------|-----------|
+| 500 Error bei `elementor-set-content` | `custom_css` falsch formatiert / `e-svg` Wert kaputt | [500-Errors](#500-errors-bei-elementor-set-content) |
+| Styles nicht sichtbar trotz korrekter JSON | `classes` Array falsch strukturiert (nach `add_class`) | [Data-Corruption](#data-corruption-classes-array) |
+| Farben falsch / GV nicht aufgelöst | Token-Referenz broken / GV-Drift | [Token-Issues](#token--variable-issues) |
+| Bilder laden nicht | `url:null` in image-src (Invariant IV) | [Image-Issues](#image--alt-text-issues) |
+| `classes: invalid_value` Error | `$$type: "classes"` fehlt (Guard G1) | [Style-Issues](#rendering-issues-styles-nicht-sichtbar) |
+| Container ohne Hintergrund | `background-color` lokal statt `background` (Guard G2/G3) | [CSS-Constraints](#spezifische-css-constraints) |
+| Alle Headings gleich (32px, schwarz) | RC-11 Fallback greift | [RC-11-Fallback](#rc-11-fallback) |
+| Session 401/419 | MCP-Session abgelaufen (~25-30min) | [MCP-Session](#mcp-session-handshake-debug) |
+
+---
+
 ## Schritt 1: Welcher Schritt hat gefailt?
 
 ```bash
@@ -70,6 +85,64 @@ novamira-adrianv2/adrians-* not found (z.B. adrians-get-snippet, adrians-fix-col
   → Siehe animation-workflow.md / font-workflow.md fuer die korrekte Alternative
     (add-custom-js / add-custom-css / add-code-snippet)
 
+## 500-Errors bei elementor-set-content
+
+custom_css falsch formatiert?
+  → Muss als `{"raw":"..."}` kommen, nicht als plain String
+  → e-svg Widget mit kaputtem `svg`-Wert? → `svg: { "$$type": "svg", "value": "<svg>...</svg>" }`
+
+## RC-11 Fallback
+
+Alle Headings sehen gleich aus (Inter, 32px, #111)?
+  → `convert-xml-to-v4.js` Fallback-Code (RC-11) setzt Default-Werte wenn
+    `inlineTextStyle` nicht aufgelöst werden kann
+  → Fix: `dual-source-workflow` Skill → CSS aus FramerExport extrahieren
+  → Oder: `patch-element-styles` mit korrekten font-size/color/font-family Werten
+
+## Data-Corruption: classes Array
+
+Nach `add_class` ist das `classes` Array korrupt?
+  → `classes` muss `{ "$$type": "classes", "value": ["gc-xxx"] }` Format haben
+  → Repair: `execute-php` mit Korrektur-Script:
+    ```php
+    $meta = get_post_meta($post_id, '_elementor_data', true);
+    // Fix: classes als $$type Wrapper neu schreiben
+    update_post_meta($post_id, '_elementor_data', $fixed_meta);
+    ```
+  → Oder `adrians-rollback-page` auf letzten stabilen Stand
+
+## Token / Variable Issues
+
+GV-Referenz zeigt falsche Farbe?
+  → `e-gv-*` ID hat sich geändert (GV-Drift)
+  → `novamira-adrianv2/export-design-system` → frische IDs
+  → `novamira-adrianv2/variable-audit { "report": "drift" }`
+
+## Image / Alt-Text Issues
+
+Bild lädt nicht?
+  → `url:null` im image-src → `url`-Key komplett entfernen (Invariant IV)
+  → Korrekt: `{ "$$type": "image-attachment-id", "value": 123 }` (NUR id, kein url)
+
+Alt-Text fehlt?
+  → `novamira-adrianv2/add-alt-text-from-context`
+  → Oder: `patch-element-styles` mit `alt: { "$$type": "string", "value": "Beschreibung" }`
+
+## Spezifische CSS-Constraints
+
+`background-color` in lokalen Styles = rejected?
+  → Elementor V4 akzeptiert NUR `background` (als Objekt) in lokalen Styles
+  → `background-color` NUR in Global Classes erlaubt
+  → Fix: `background: { "$$type": "background", "value": { "color": {...} } }`
+
+## Rendering-Issues: Styles nicht sichtbar
+
+JSON korrekt, aber Styles werden nicht angewendet?
+  → Prüfe: Steht die Style-ID in `settings.classes.value`? (Invariant I — Rendering-Gate)
+  → Prüfe: `$$type` Wrapper an allen props?
+  → Prüfe: `classes` Array Format: `{ "$$type": "classes", "value": [...] }`
+  → Prüfe: Breakpoint `"desktop"` → muss `null` sein (Guard G5)
+
 add-custom-js / add-code-snippet schlägt fehl?
   → post_id fehlt bei add-custom-js? -> Ability ist post_id-scoped (HTML-Widget auf der Seite)
   → add-code-snippet braucht Elementor Pro Custom Code -> list-code-snippets zur Verifikation
@@ -99,6 +172,40 @@ GC transform-functions PHP Warning?
 | meta-tags/schema nicht gesetzt | Native Live-Abilities existieren bereits | novamira-adrianv2/generate-meta-tags + generate-schema-markup (ohne Praefix) | Naming-Fix |
 
 ---
+
+## 5-Step Post-Build Recovery (wenn Build kaputt)
+
+```
+1. elementor-get-content (skeleton) → Struktur-Check
+2. layout-audit → Pass-through finden
+3. visual-qa → Overflow/Z-Index
+4. responsive-audit → Fehlende Breakpoints
+5. patch-element-styles → Gezielt fixen (KEIN Tree-Rebuild!)
+```
+
+## Recovery-Tools
+
+### classes Array reparieren (PHP)
+
+```php
+// execute-php auf dem Server:
+$post_id = 1950;
+$data = json_decode(get_post_meta($post_id, '_elementor_data', true), true);
+function fix_classes(&$el) {
+  if (isset($el['settings']['classes']) && is_array($el['settings']['classes'])) {
+    $el['settings']['classes'] = ['$$type' => 'classes', 'value' => $el['settings']['classes']];
+  }
+  if (isset($el['elements'])) foreach ($el['elements'] as &$child) fix_classes($child);
+}
+fix_classes($data);
+update_post_meta($post_id, '_elementor_data', wp_slash(json_encode($data)));
+```
+
+### Rollback auf letzten stabilen Stand
+
+```
+novamira-adrianv2/rollback-page { post_id: POST_ID }
+```
 
 ## Debug-Befehle
 
