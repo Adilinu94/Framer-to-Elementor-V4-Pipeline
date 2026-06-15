@@ -82,7 +82,7 @@ export async function runPipeline({
   const rootDir = findWorkspaceRoot();
   const startTime = Date.now();
   const steps = [];
-  let exportDir = existingExportDir;
+  let exportDir = existingExportDir ? path.resolve(existingExportDir) : null;
   let tokenMapPath = null;
   let designSystemDir = null;
   let v4TreePath = null;
@@ -179,7 +179,7 @@ export async function runPipeline({
     {
       command: nodeBin,
       args: [
-        path.join(pipelineDir, 'scripts', 'extract-framer-css-tokens.js'),
+        path.join(pipelineDir, 'extract-framer-css-tokens.js'),
         '--html', exportHtml,
         '--output', tokenMapPath,
         ...(verbose ? ['--verbose'] : []),
@@ -190,7 +190,7 @@ export async function runPipeline({
     {
       command: nodeBin,
       args: [
-        path.join(pipelineDir, 'scripts', 'resolve-fonts.js'),
+        path.join(pipelineDir, 'resolve-fonts.js'),
         '--html', exportHtml,
         '--fonts-dir', path.join(assetsDir, 'fonts'),
         '--output', fontResPath,
@@ -227,7 +227,7 @@ export async function runPipeline({
 
     try {
       await runFile(nodeBin, [
-        path.join(pipelineDir, 'scripts', 'extract-framer-css-tokens.js'),
+        path.join(pipelineDir, 'extract-framer-css-tokens.js'),
         '--url', framerUrl,
         '--output', tokenMapPath,
         ...(verbose ? ['--verbose'] : []),
@@ -324,7 +324,7 @@ export async function runPipeline({
   if (!dsSkipped) {
     try {
       await runFile(nodeBin, [
-        path.join(pipelineDir, 'scripts', 'design-system-builder.js'),
+        path.join(pipelineDir, 'design-system-builder.js'),
         '--token-map', tokenMapPath,
         '--output-dir', designSystemDir,
         ...(verbose ? ['--verbose'] : []),
@@ -386,7 +386,7 @@ export async function runPipeline({
       const pageName = path.basename(xmlFile, '.xml');
       try {
         await runFile(nodeBin, [
-          path.join(pipelineDir, 'scripts', 'convert-xml-to-v4.js'),
+          path.join(pipelineDir, 'convert-xml-to-v4.js'),
           '--xml', xmlFile,
           '--token-map', tokenMapArg,
           '--output-dir', outputDir,
@@ -422,7 +422,7 @@ export async function runPipeline({
     postValidationTasks.push({
       command: nodeBin,
       args: [
-        path.join(pipelineDir, 'scripts', 'framer-pre-build-validate.js'),
+        path.join(pipelineDir, 'framer-pre-build-validate.js'),
         '--tree', v4TreePath,
         '--tokens', tokenMapPath,
         '--output', preBuildReportPath,
@@ -434,7 +434,7 @@ export async function runPipeline({
     // Task: Quality Gate (skip if --skip-qa)
     if (!skipQa) {
       const gateArgs = [
-        path.join(pipelineDir, 'scripts', 'build-quality-gate.js'),
+        path.join(pipelineDir, 'build-quality-gate.js'),
         '--tree', v4TreePath,
         '--tokens', tokenMapPath,
         '--output-dir', qaDir,
