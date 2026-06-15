@@ -148,13 +148,22 @@ async function runScriptBatch(taskDefs) {
 
 log('Step 1/6: Pre-Build Validation (12 Guards)...');
 
+const preBuildOutputPath = path.join(outDir, 'pre-build-validation.json');
 const preBuildArgs = ['--tree', args.tree];
 if (args.tokens) preBuildArgs.push('--tokens', args.tokens);
 if (args.fonts)  preBuildArgs.push('--fonts', args.fonts);
-preBuildArgs.push('--output', path.join(outDir, 'pre-build-validation.json'));
+preBuildArgs.push('--output', preBuildOutputPath);
 
 const preBuildResult = runScript('framer-pre-build-validate.js', preBuildArgs);
-const preBuildScore = preBuildResult.parsed?.meta?.score || 0;
+// Primary: read from output file (script writes JSON there when --output is set, stdout stays empty)
+let preBuildScore = 0;
+try {
+  const fileData = JSON.parse(fs.readFileSync(preBuildOutputPath, 'utf8'));
+  preBuildScore = fileData.meta?.score || 0;
+} catch {
+  // Fallback: try stdout (when --output is not set or script version differs)
+  preBuildScore = preBuildResult.parsed?.meta?.score || 0;
+}
 const minScore = parseInt(args['min-score']) || 85;
 
 if (preBuildScore >= minScore && preBuildResult.ok) {
