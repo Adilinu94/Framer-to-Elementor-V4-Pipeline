@@ -1364,21 +1364,87 @@ describe('A2: v4-tree Mode (ENH-9)', () => {
   });
 });
 
-// ─── Suite 25: FIX-7 — callParallel() p-limit (ENH-10) ────────────────────
+// ─── Suite 25: Sprint 14 — p-limit Tuning + MCP_CONCURRENCY_PROFILE ──────
 
-describe('FIX-7: callParallel() p-limit', () => {
-  test('FIX-7: McpBridge.defaultConcurrency is 3', async () => {
+describe('Sprint 14: p-limit Tuning + MCP_CONCURRENCY_PROFILE', () => {
+  test('SP14: McpBridge.defaultConcurrency is 5 (bumped from 3)', async () => {
     const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
     const bridge = new McpBridge({ mcpUrl: 'http://localhost:9999' });
-    assert.equal(bridge.defaultConcurrency, 3,
-      `Default concurrency should be 3, got ${bridge.defaultConcurrency}`);
+    assert.equal(bridge.defaultConcurrency, 5,
+      `Default concurrency should be 5, got ${bridge.defaultConcurrency}`);
   });
 
-  test('FIX-7: McpBridge respects constructor concurrency option', async () => {
+  test('SP14: McpBridge respects constructor concurrency option', async () => {
     const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
-    const bridge = new McpBridge({ mcpUrl: 'http://localhost:9999', concurrency: 5 });
-    assert.equal(bridge.defaultConcurrency, 5,
+    const bridge = new McpBridge({ mcpUrl: 'http://localhost:9999', concurrency: 7 });
+    assert.equal(bridge.defaultConcurrency, 7,
       `Constructor concurrency should override default, got ${bridge.defaultConcurrency}`);
+  });
+
+  test('SP14: _resolveConcurrency() returns 5 for "medium" profile', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    const origProfile = process.env.MCP_CONCURRENCY_PROFILE;
+    const origExplicit = process.env.MCP_CONCURRENCY;
+    delete process.env.MCP_CONCURRENCY;
+    process.env.MCP_CONCURRENCY_PROFILE = 'medium';
+    const val = McpBridge._resolveConcurrency();
+    if (origProfile !== undefined) process.env.MCP_CONCURRENCY_PROFILE = origProfile;
+    else delete process.env.MCP_CONCURRENCY_PROFILE;
+    if (origExplicit !== undefined) process.env.MCP_CONCURRENCY = origExplicit;
+    assert.equal(val, 5, `_resolveConcurrency() for medium should be 5, got ${val}`);
+  });
+
+  test('SP14: _resolveConcurrency() returns 2 for "low" profile', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    const origProfile = process.env.MCP_CONCURRENCY_PROFILE;
+    const origExplicit = process.env.MCP_CONCURRENCY;
+    delete process.env.MCP_CONCURRENCY;
+    process.env.MCP_CONCURRENCY_PROFILE = 'low';
+    const val = McpBridge._resolveConcurrency();
+    if (origProfile !== undefined) process.env.MCP_CONCURRENCY_PROFILE = origProfile;
+    else delete process.env.MCP_CONCURRENCY_PROFILE;
+    if (origExplicit !== undefined) process.env.MCP_CONCURRENCY = origExplicit;
+    assert.equal(val, 2, `_resolveConcurrency() for low should be 2, got ${val}`);
+  });
+
+  test('SP14: _resolveConcurrency() returns 10 for "high" profile', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    const origProfile = process.env.MCP_CONCURRENCY_PROFILE;
+    const origExplicit = process.env.MCP_CONCURRENCY;
+    delete process.env.MCP_CONCURRENCY;
+    process.env.MCP_CONCURRENCY_PROFILE = 'high';
+    const val = McpBridge._resolveConcurrency();
+    if (origProfile !== undefined) process.env.MCP_CONCURRENCY_PROFILE = origProfile;
+    else delete process.env.MCP_CONCURRENCY_PROFILE;
+    if (origExplicit !== undefined) process.env.MCP_CONCURRENCY = origExplicit;
+    assert.equal(val, 10, `_resolveConcurrency() for high should be 10, got ${val}`);
+  });
+
+  test('SP14: MCP_CONCURRENCY env var takes priority over profile', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    const origProfile = process.env.MCP_CONCURRENCY_PROFILE;
+    const origExplicit = process.env.MCP_CONCURRENCY;
+    process.env.MCP_CONCURRENCY = '8';
+    process.env.MCP_CONCURRENCY_PROFILE = 'low'; // low=2, but explicit=8 wins
+    const val = McpBridge._resolveConcurrency();
+    if (origProfile !== undefined) process.env.MCP_CONCURRENCY_PROFILE = origProfile;
+    else delete process.env.MCP_CONCURRENCY_PROFILE;
+    if (origExplicit !== undefined) process.env.MCP_CONCURRENCY = origExplicit;
+    else delete process.env.MCP_CONCURRENCY;
+    assert.equal(val, 8, `MCP_CONCURRENCY=8 should override profile, got ${val}`);
+  });
+
+  test('SP14: _resolveConcurrency() returns 5 for unknown profile', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    const origProfile = process.env.MCP_CONCURRENCY_PROFILE;
+    const origExplicit = process.env.MCP_CONCURRENCY;
+    delete process.env.MCP_CONCURRENCY;
+    process.env.MCP_CONCURRENCY_PROFILE = 'unicorn';
+    const val = McpBridge._resolveConcurrency();
+    if (origProfile !== undefined) process.env.MCP_CONCURRENCY_PROFILE = origProfile;
+    else delete process.env.MCP_CONCURRENCY_PROFILE;
+    if (origExplicit !== undefined) process.env.MCP_CONCURRENCY = origExplicit;
+    assert.equal(val, 5, `_resolveConcurrency() for unknown profile should fallback to 5, got ${val}`);
   });
 });
 
@@ -1689,6 +1755,158 @@ describe('S34: ENH-13 — Quality Metrics', () => {
   });
 });
 
+
+describe('S35: ENH-14 — Pipeline Performance Profiler', () => {
+
+  test('ENH-14: --help outputs usage information', () => {
+    const { stdout } = runFromRoot('scripts/profile-pipeline.js', ['--help']);
+    assert.ok(stdout.includes('USAGE') || stdout.includes('profile-pipeline'), '--help shows usage');
+    assert.ok(stdout.includes('--tree'), '--help mentions --tree');
+    assert.ok(stdout.includes('--bottleneck'), '--help mentions --bottleneck');
+    assert.ok(stdout.includes('token-extraction'), '--help lists phases');
+  });
+
+  test('ENH-14: missing --tree exits with code 2 and shows error on stderr', () => {
+    const { ok, code, stderr } = runFromRoot(
+      'scripts/profile-pipeline.js',
+      ['--tree', './nonexistent-tree.json'],
+      { expectFail: true }
+    );
+    assert.equal(ok, false, 'Should fail with missing tree');
+    assert.ok(
+      code === 2 || (stderr || '').includes('not found') || (stderr || '').includes('Error'),
+      'Shows error on stderr'
+    );
+  });
+
+  test('ENH-14: runs on minimal v4-tree.json and produces valid JSON with 7 phases', () => {
+    const tree = {
+      id: 'root', widgetType: 'e-flexbox',
+      elements: [
+        { id: 'c1', widgetType: 'e-heading', elements: [] },
+        { id: 'c2', widgetType: 'e-paragraph', elements: [] },
+      ],
+    };
+    const treePath = tmpFile('s35-tree.json', tree);
+
+    const { stdout } = runFromRoot('scripts/profile-pipeline.js', [
+      '--tree', treePath, '--timeout', '30000',
+    ]);
+
+    const report = JSON.parse(stdout);
+    assert.ok(report.generated, 'Has generated timestamp');
+    assert.ok(Array.isArray(report.phases), 'Has phases array');
+    assert.equal(report.phases.length, 7, 'Has exactly 7 phases');
+    assert.ok(typeof report.total_ms === 'number', 'Has total_ms number');
+    assert.ok(report.bottleneck, 'Has bottleneck array');
+    assert.ok(report.bottleneck.length <= 3, 'Bottleneck has max 3 entries');
+
+    const phase = report.phases[0];
+    assert.ok(phase.name, 'Phase has name');
+    assert.ok(typeof phase.duration_ms === 'number', 'Phase has duration_ms');
+    assert.ok(['OK', 'FAIL'].includes(phase.status), 'Phase status is OK or FAIL');
+  });
+
+  test('ENH-14: --bottleneck flag includes pct_of_total in output', () => {
+    const tree = {
+      id: 'root', widgetType: 'e-flexbox',
+      elements: [
+        { id: 'c1', widgetType: 'e-heading', elements: [] },
+      ],
+    };
+    const treePath = tmpFile('s35-bottleneck.json', tree);
+
+    const { stdout } = runFromRoot('scripts/profile-pipeline.js', [
+      '--tree', treePath, '--bottleneck', '--timeout', '30000',
+    ]);
+
+    const report = JSON.parse(stdout);
+    assert.ok(report.bottleneck, 'Has bottleneck data');
+    assert.ok(report.bottleneck.length > 0, 'Bottleneck has at least one entry');
+    const b = report.bottleneck[0];
+    assert.ok(typeof b.pct_of_total === 'number', 'Bottleneck has pct_of_total');
+  });
+
+  test('ENH-14: report has ok_count and fail_count matching phases', () => {
+    const tree = {
+      id: 'root', widgetType: 'e-flexbox',
+      elements: [
+        { id: 'c1', widgetType: 'e-heading', elements: [] },
+      ],
+    };
+    const treePath = tmpFile('s35-count.json', tree);
+
+    const { stdout } = runFromRoot('scripts/profile-pipeline.js', [
+      '--tree', treePath, '--timeout', '30000',
+    ]);
+
+    const report = JSON.parse(stdout);
+    assert.equal(
+      report.ok_count + report.fail_count,
+      report.phases.length,
+      'ok_count + fail_count = total phases'
+    );
+  });
+});
+
+// ─── Suite 38: Phase 6 — Pipeline Smoke Test ──────────────────────────
+
+describe('S38: Phase 6 — Pipeline Smoke Test', () => {
+  test('P6: runPipeline with export-dir completes without crashing', async () => {
+    const { runPipeline } = await import(toFileUrl(join(SCRIPTS, 'wizard', 'cmd-pipeline.js')));
+
+    // Create minimal export-dir structure
+    const testDir = join(tmpdir(), 'pipeline-test', 'p6-export-' + Date.now());
+    mkdirSync(testDir, { recursive: true });
+    mkdirSync(join(testDir, 'tokens'), { recursive: true });
+    mkdirSync(join(testDir, 'assets'), { recursive: true });
+
+    // Minimal index.html with CSS variables
+    writeFileSync(join(testDir, 'index.html'), `<!DOCTYPE html><html><head><style>
+      :root { --token-primary: #0e2a3b; --token-bg: #ffffff; }
+    </style></head><body></body></html>`, 'utf8');
+
+    // Minimal XML file for V4 conversion
+    writeFileSync(join(testDir, 'hero.xml'), `<Frame name="Hero"><Text name="H1" font-size="48px">Hello World</Text></Frame>`, 'utf8');
+
+    const result = await runPipeline({
+      exportDir: testDir,
+      dryRun: true,
+      skipQa: false,
+      verbose: false,
+    });
+
+    assert.ok(result, 'Should return a result object');
+    assert.ok(result.steps, 'Should have steps array');
+    assert.equal(result.steps.length, 14, 'Should have all 14 steps');
+    assert.ok(result.steps.filter(s => s.status === 'ok' || s.status === 'skipped' || s.status === 'warning' || s.status === 'dry-run' || s.status === 'delegated').length >= 10,
+      `At least 10 steps should complete, got: ${result.steps.map(s => `${s.step}:${s.status}`).join(', ')}`);
+    assert.equal(typeof result.elapsed_seconds, 'number', 'Should have elapsed_seconds');
+    assert.ok(result.artifacts, 'Should have artifacts object');
+    assert.ok(result.artifacts.token_mapping, 'Should have token_mapping artifact');
+  });
+
+  test('P6: wizard.js pipeline --help shows usage', () => {
+    const result = runFromRoot('wizard.js', ['pipeline', '--help']);
+    assert.ok(result.ok, 'pipeline --help should exit 0');
+    assert.ok(result.stdout.includes('14-Step'), 'Should mention 14-Step Pipeline');
+    assert.ok(result.stdout.includes('--export-dir'), 'Should mention --export-dir');
+    assert.ok(result.stdout.includes('--skip-qa'), 'Should mention --skip-qa');
+  });
+
+  test('P6: wizard.js help pipeline shows specific help', () => {
+    const result = runFromRoot('wizard.js', ['help', 'pipeline']);
+    assert.ok(result.stdout.includes('14-Step'), 'Should mention pipeline');
+    assert.ok(result.stdout.includes('--url'), 'Should mention --url flag');
+  });
+
+  test('P6: wizard.js help shows pipeline subcommand in main help', () => {
+    const result = runFromRoot('wizard.js', ['help']);
+    assert.ok(result.ok);
+    assert.ok(result.stdout.includes('pipeline'), 'Main help should show pipeline subcommand');
+  });
+});
+
 function runFromRoot(script, extraArgs = [], { expectFail = false } = {}) {
   try {
     const out = execFileSync(NODE, [join(PROJECT_ROOT, script), ...extraArgs], {
@@ -1702,3 +1920,180 @@ function runFromRoot(script, extraArgs = [], { expectFail = false } = {}) {
     throw err;
   }
 }
+
+// ─── Suite 36: ENH-15 ── axe-core A11y in visual-qa.js ─────────────────
+
+describe('S36: ENH-15 — axe-core A11y', () => {
+  test('ENH-15: visual-qa --help shows --a11y flag', () => {
+    const { stdout } = runFromRoot('scripts/visual-qa.js', ['--help']);
+    assert.ok(stdout.includes('--a11y'), 'help must show --a11y flag');
+    assert.ok(stdout.includes('--skip-a11y'), 'help must show --skip-a11y flag');
+    assert.ok(stdout.includes('--a11y-output'), 'help must show --a11y-output flag');
+  });
+
+  test('ENH-15: visual-qa --dry-run --a11y produces 7 checks with A1', () => {
+    const outFile = tmpFile('s36-dry-a11y.json');
+    run('visual-qa.js', [
+      '--url', 'https://example.com/?p=123',
+      '--dry-run',
+      '--a11y',
+      '--output', outFile,
+    ]);
+    const report = readJson(outFile);
+    assert.ok(report.meta.all_passed, 'Dry-run must pass all checks');
+    assert.ok(report.meta.a11y_audit === false || report.meta.backend === 'dry-run',
+      'A11y not available in dry-run');
+    for (const result of report.results) {
+      assert.ok('A1_a11y_critical_zero' in result.checks,
+        'A1 check must exist');
+      assert.equal(Object.keys(result.checks).length, 7,
+        'Must have 7 checks (V1-V6 + A1)');
+    }
+  });
+
+  test('ENH-15: visual-qa --dry-run --skip-a11y produces report with a11y disabled', () => {
+    const outFile = tmpFile('s36-skip-a11y.json');
+    run('visual-qa.js', [
+      '--url', 'https://example.com/?p=123',
+      '--dry-run',
+      '--skip-a11y',
+      '--output', outFile,
+    ]);
+    const report = readJson(outFile);
+    assert.equal(report.a11y.backend, 'disabled', 'A11y should be disabled');
+  });
+
+  test('ENH-15: visual-qa --a11y-output writes standalone a11y report', () => {
+    const outFile = tmpFile('s36-qa.json');
+    const a11yFile = tmpFile('s36-a11y.json');
+    run('visual-qa.js', [
+      '--url', 'https://example.com/?p=123',
+      '--dry-run',
+      '--a11y',
+      '--output', outFile,
+      '--a11y-output', a11yFile,
+    ]);
+    assert.ok(existsSync(a11yFile), '--a11y-output must create standalone file');
+    const a11yReport = readJson(a11yFile);
+    assert.ok(a11yReport.url, 'Standalone report must have url');
+    assert.ok(a11yReport.tags, 'Standalone report must have tags');
+    assert.ok(Array.isArray(a11yReport.violations), 'Standalone report must have violations array');
+    assert.ok(a11yReport.aggregate, 'Standalone report must have aggregate');
+  });
+});
+
+// ─── Suite 37: Sprint 15 — FramerExport Cache Tests ─────────────────────
+
+describe('S37: Sprint 15 — FramerExport Cache Tests', () => {
+  test('SP15: cache hit when URL matches and exportDir is fresh', async () => {
+    const { checkFramerExportCache, writeFramerExportCache } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const testDir = join(tmpdir(), 'pipeline-test', 's37-fresh-' + Date.now());
+    mkdirSync(testDir, { recursive: true });
+    writeFileSync(join(testDir, 'index.html'), '<html></html>', 'utf8');
+    await writeFramerExportCache('https://test.example.com/', testDir);
+    const result = await checkFramerExportCache('https://test.example.com/');
+    assert.strictEqual(result.cached, true, 'Should be cached hit');
+    assert.strictEqual(result.exportDir, testDir, 'exportDir should match');
+  });
+
+  test('SP15: cache miss when URL differs', async () => {
+    const { checkFramerExportCache, writeFramerExportCache } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const testDir = join(tmpdir(), 'pipeline-test', 's37-diff-' + Date.now());
+    mkdirSync(testDir, { recursive: true });
+    writeFileSync(join(testDir, 'index.html'), '<html></html>', 'utf8');
+    await writeFramerExportCache('https://url-a.example.com/', testDir);
+    const result = await checkFramerExportCache('https://url-b.example.com/');
+    assert.strictEqual(result.cached, false, 'Different URL should be cache miss');
+  });
+
+  test('SP15: cache miss when forceRefresh=true', async () => {
+    const { checkFramerExportCache, writeFramerExportCache } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const testDir = join(tmpdir(), 'pipeline-test', 's37-force-' + Date.now());
+    mkdirSync(testDir, { recursive: true });
+    writeFileSync(join(testDir, 'index.html'), '<html></html>', 'utf8');
+    await writeFramerExportCache('https://force.example.com/', testDir);
+    const result = await checkFramerExportCache('https://force.example.com/', true);
+    assert.strictEqual(result.cached, false, 'forceRefresh should bypass cache');
+  });
+
+  test('SP15: cache miss when exportDir no longer exists', async () => {
+    const { checkFramerExportCache, writeFramerExportCache, writeJsonAtomic } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const testDir = join(tmpdir(), 'pipeline-test', 's37-gone-' + Date.now());
+    // Write cache pointing to a dir that doesn't exist
+    const { pipelineDir } = await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const CACHE_FILE = join(pipelineDir, '.framer-export-cache.json');
+    await writeJsonAtomic(CACHE_FILE, {
+      url: 'https://gone.example.com/',
+      exportDir: testDir,
+      timestamp: new Date().toISOString(),
+    });
+    const result = await checkFramerExportCache('https://gone.example.com/');
+    assert.strictEqual(result.cached, false, 'Missing exportDir should be cache miss');
+  });
+
+  test('SP15: corrupt cache JSON returns cached=false (not crash)', async () => {
+    const { checkFramerExportCache, writeJsonAtomic } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const { pipelineDir } = await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const CACHE_FILE = join(pipelineDir, '.framer-export-cache.json');
+    // Write corrupt (non-JSON) content
+    writeFileSync(CACHE_FILE, 'NOT VALID JSON {{{', 'utf8');
+    const result = await checkFramerExportCache('https://corrupt.example.com/');
+    assert.strictEqual(result.cached, false, 'Corrupt JSON should return cached=false, not throw');
+  });
+
+  test('SP15: writeFramerExportCache no-ops when exportDir does not exist', async () => {
+    const { writeFramerExportCache } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const { pipelineDir } = await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const CACHE_FILE = join(pipelineDir, '.framer-export-cache.json');
+    // First write a known cache entry
+    const testDir = join(tmpdir(), 'pipeline-test', 's37-noop-' + Date.now());
+    mkdirSync(testDir, { recursive: true });
+    writeFileSync(join(testDir, 'index.html'), '<html></html>', 'utf8');
+    await writeFramerExportCache('https://known.example.com/', testDir);
+    // Now try to write with a non-existent dir — should no-op, preserving old cache
+    await writeFramerExportCache('https://new.example.com/', join(tmpdir(), 'nonexistent-' + Date.now()));
+    const { readJsonIfExists } = await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const cache = await readJsonIfExists(CACHE_FILE);
+    assert.strictEqual(cache.url, 'https://known.example.com/', 'Old cache entry should be preserved');
+  });
+
+  test('SP15: writeJsonAtomic writes valid JSON that can be re-read', async () => {
+    const { writeJsonAtomic, readJsonIfExists } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const filePath = tmpFile('s37-atomic.json', null);
+    const data = { test: 'value', count: 42 };
+    await writeJsonAtomic(filePath, data);
+    const read = await readJsonIfExists(filePath);
+    assert.deepStrictEqual(read, data, 'Atomic write should produce valid re-readable JSON');
+  });
+
+  test('SP15: writeJsonAtomic cleans up .tmp file after rename', async () => {
+    const { writeJsonAtomic } =
+      await import(toFileUrl(join(SCRIPTS, 'wizard', 'shared.js')));
+    const filePath = tmpFile('s37-tmp.json', null);
+    const tmpPath = filePath + '.tmp';
+    await writeJsonAtomic(filePath, { ok: true });
+    assert.strictEqual(existsSync(filePath), true, 'Target file must exist');
+    assert.strictEqual(existsSync(tmpPath), false, '.tmp file must be cleaned up');
+  });
+
+  test('SP15: callParallel dead fallback updated to 5', async () => {
+    const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
+    // Verify the source code has ?? 5, not ?? 3
+    const src = readFileSync(join(SCRIPTS, 'lib', 'mcp-bridge.js'), 'utf8');
+    assert.ok(
+      !src.includes('this.defaultConcurrency ?? 3'),
+      'Dead fallback ?? 3 should be removed from callParallel'
+    );
+    assert.ok(
+      src.includes('this.defaultConcurrency ?? 5'),
+      'Dead fallback should be ?? 5'
+    );
+  });
+});
