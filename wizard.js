@@ -34,7 +34,7 @@ const pipelineDir = __dirname;
 // ── Shared imports (Sprint 6: modularized from scripts/wizard/shared.js) ──
 import {
   log, findWorkspaceRoot, findFramerExportDir,
-  runFile, findIndexHtmlDirs, readJsonIfExists,
+  runFile, runParallel, findIndexHtmlDirs, readJsonIfExists,
   promptErrorRecovery, runWithRecovery,
   nodeBin, npxBin, npmBin,
   checkFramerExportCache, writeFramerExportCache,
@@ -578,15 +578,18 @@ if (process.argv.includes('--non-interactive')) {
       { args: ['scripts/html-to-widget-plan.js', '--html', exportHtml, '--output', path.join(tokensDir, 'widget-plan.json')], desc: 'Widget-Plan' },
     ];
 
-    for (const step of extractionSteps) {
-      log.step('Extrahiere ' + step.desc + '...');
-      try {
-        await runFile(nodeBin, step.args, step.desc, pipelineDir);
-        log.success(step.desc + ' abgeschlossen.');
-      } catch (err) {
-        log.warn(step.desc + ' fehlgeschlagen: ' + String(err).slice(0, 100));
-      }
-    }
+    // Parallel extraction (all steps are independent, read from same HTML)
+    // design-token-extractor and extract-framer-styles are REQUIRED (critical inputs)
+    await runParallel(
+      extractionSteps.map((s, i) => ({
+        command: nodeBin,
+        args: s.args,
+        description: s.desc,
+        cwd: pipelineDir,
+        // Only image-urls, responsive-breakpoints, animations are truly optional
+        optional: i !== 3 && i !== 4,  // indices 3=extract-framer-styles, 4=design-token-extractor are REQUIRED
+      }))
+    );
 
     // Generate manifest
     const manifest = {

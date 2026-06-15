@@ -1,25 +1,24 @@
 /**
- * scripts/wizard/cmd-pipeline.js — Full 14-Step Pipeline (Phase 6)
+ * scripts/wizard/cmd-pipeline.js — Full 14-Step Pipeline (Phase 6, Optimized)
  *
- * UMBAUPLAN v2.0 Phase 6: Orchestriert alle 14 Pipeline-Schritte.
- * Wird sowohl vom interaktiven Wizard als auch als standalone
- * Sub-Command (`node wizard.js pipeline`) verwendet.
+ * UMBAUPLAN v2.0 Phase 6+8: Orchestriert alle 14 Pipeline-Schritte.
+ * Optimized: parallel extraction, output dedup, removed redundant calls.
  *
  * STEPS:
  *   1.  FramerExport (cached, existing)
  *   2.  CSS-Token-Extraktion (extract-framer-css-tokens.js, PRIMARY)
  *   3.  Browser-Crawl-Fallback (extract-framer-css-tokens.js --url, FALLBACK)
- *   4.  Unframer MCP getProjectXml (delegated to agent)
- *   5.  Unframer MCP getNodeXml(section) (delegated to agent)
- *   6.  Style-Referenzen aus XML sammeln (token-collection)
- *   7.  Token-Mapping erstellen (design-system-builder.js)
- *   8.  Token-Mapping validieren (pre-build-validation token checks)
- *   9.  Design System aufbauen (design-system-builder.js)
- *  10.  resolve-fonts.js (existing, font-resolution.json)
+ *   4.  Unframer MCP getProjectXml (delegated)
+ *   5.  Unframer MCP getNodeXml(section) (delegated)
+ *   6.  Style-Referenzen sammeln
+ *   7.  Token-Mapping erstellen
+ *   8.  Token-Mapping validieren
+ *   9.  Design System aufbauen (design-system-builder.js, WITH OUTPUT DEDUP)
+ *  10.  resolve-fonts.js (parallel mit Step 2)
  *  11.  convert-xml-to-v4.js (WITH --token-map + --output-dir)
- *  12.  framer-pre-build-validate.js (17 Guards, Score >= 85%)
- *  13.  elementor-set-content (MCP — delegated to agent)
- *  14.  Visual QA + Auto-Fix (build-quality-gate.js)
+ *  12.  framer-pre-build-validate.js (parallel mit Step 14)
+ *  13.  elementor-set-content (MCP — delegated)
+ *  14.  Visual QA + Auto-Fix (build-quality-gate.js, parallel mit Step 12)
  *
  * Usage:
  *   node wizard.js pipeline --url https://example.framer.app/ [--post-id 42]
@@ -31,7 +30,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import {
   log, findWorkspaceRoot, findFramerExportDir,
-  runFile, findIndexHtmlDirs, readJsonIfExists,
+  runFile, runParallel, findIndexHtmlDirs, readJsonIfExists,
   nodeBin, npxBin, npmBin,
   checkFramerExportCache, writeFramerExportCache,
   pipelineDir, repoDir,
@@ -41,7 +40,7 @@ import {
  * Gibt die Hilfe fuer dieses Subcommand aus.
  */
 export function printHelp() {
-  console.log(`wizard.js pipeline — Vollstaendige 14-Step Pipeline
+  console.log(`wizard.js pipeline — Vollstaendige 14-Step Pipeline (OPTIMIZED)
 
 USAGE:
   node wizard.js pipeline --url <framer-url> [OPTIONS]
@@ -55,21 +54,11 @@ OPTIONS:
   --dry-run             Keine MCP-Calls, nur Plan generieren
   --verbose             Ausfuehrliche Logs
 
-PIPELINE STEPS:
-   1. FramerExport (gecached)
-   2. CSS-Token-Extraktion (FramerExport HTML)
-   3. Browser-Crawl-Fallback (wenn 2 unvollstaendig)
-   4. Unframer MCP getProjectXml
-   5. Unframer MCP getNodeXml(sections)
-   6. Style-Referenzen sammeln
-   7. Token-Mapping erstellen
-   8. Token-Mapping validieren
-   9. Design System aufbauen (Variables + Classes)
-  10. Fonts aufloesen (resolve-fonts.js)
-  11. XML → V4 Tree konvertieren
-  12. Pre-Build-Validation (17 Guards)
-  13. elementor-set-content (MCP)
-  14. Visual QA + Auto-Fix
+OPTIMIZATIONS:
+  - Steps 2+10 run in PARALLEL (CSS tokens + fonts)
+  - Steps 12+14 run in PARALLEL (validate + QA gate)
+  - Design System output dedup (skips if fresh)
+  - resolve-fonts.js NOT called twice
 
 BEISPIELE:
   node wizard.js pipeline --url https://hilarious-workshops-284047.framer.app/
@@ -79,17 +68,7 @@ BEISPIELE:
 }
 
 /**
- * Führt den vollen 14-Step Pipeline-Durchlauf aus.
- *
- * @param {object} options
- * @param {string} options.framerUrl - Framer-Quell-URL
- * @param {string} [options.postId] - WordPress Post-ID
- * @param {string} [options.exportDir] - Existierendes Export-Verzeichnis (überspringt Schritt 1)
- * @param {boolean} [options.noCache] - Cache umgehen
- * @param {boolean} [options.skipQa] - QA-Gate überspringen
- * @param {boolean} [options.dryRun] - Keine MCP-Calls
- * @param {boolean} [options.verbose] - Ausführliche Logs
- * @returns {Promise<object>} Pipeline-Resultat mit Status und Artefakten
+ * Führt den vollen 14-Step Pipeline-Durchlauf aus (optimized).
  */
 export async function runPipeline({
   framerUrl,
@@ -108,10 +87,8 @@ export async function runPipeline({
   let designSystemDir = null;
   let v4TreePath = null;
 
-  const vLog = (...m) => { if (verbose) process.stderr.write('[pipeline] ' + m.join(' ') + '\n'); };
-
   console.log(`\n${'═'.repeat(60)}`);
-  console.log('  🚀 FULL 14-STEP PIPELINE');
+  console.log('  🚀 FULL 14-STEP PIPELINE (OPTIMIZED)');
   console.log(`${'═'.repeat(60)}`);
   console.log(`  URL:     ${framerUrl || '(from export-dir)'}`);
   console.log(`  Post-ID: ${postId || 'auto'}`);
@@ -128,7 +105,6 @@ export async function runPipeline({
   } else if (framerUrl) {
     log.step('Step 1/14: FramerExport...');
 
-    // Check cache first
     const cacheResult = await checkFramerExportCache(framerUrl, noCache);
     if (cacheResult.cached && cacheResult.exportDir && existsSync(cacheResult.exportDir)) {
       exportDir = cacheResult.exportDir;
@@ -137,7 +113,7 @@ export async function runPipeline({
     } else {
       const framerExportDir = findFramerExportDir(rootDir);
       if (!framerExportDir) {
-        log.error('FramerExport nicht gefunden. Setze FRAMER_EXPORT_DIR oder lege unter tools/framer-export ab.');
+        log.error('FramerExport nicht gefunden.');
         return { status: 'FAILED', step: 1, error: 'FramerExport directory not found' };
       }
 
@@ -182,31 +158,60 @@ export async function runPipeline({
     return { status: 'FAILED', step: 1, error: 'index.html missing in export dir' };
   }
 
-  // ════════════════════════════════════════════
-  // STEP 2: CSS-Token-Extraktion (FramerExport HTML)
-  // ════════════════════════════════════════════
-
-  log.step('Step 2/14: CSS-Token-Extraktion (FramerExport HTML)...');
-
+  // Initialize sub-directories
   const tokensDir = path.join(exportDir, 'tokens');
+  const assetsDir = path.join(exportDir, 'assets');
+  designSystemDir = path.join(exportDir, 'design-system');
   await fs.mkdir(tokensDir, { recursive: true });
-  tokenMapPath = path.join(tokensDir, 'token-mapping.json');
+  await fs.mkdir(assetsDir, { recursive: true });
+  await fs.mkdir(designSystemDir, { recursive: true });
 
-  try {
-    await runFile(nodeBin, [
-      path.join(pipelineDir, 'scripts', 'extract-framer-css-tokens.js'),
-      '--html', exportHtml,
-      '--output', tokenMapPath,
-      ...(verbose ? ['--verbose'] : []),
-    ], 'CSS-Token-Extraktion', pipelineDir);
-    steps.push({ step: 2, name: 'CSS-Token-Extraktion', status: 'ok' });
-  } catch (err) {
-    log.warn(`Token-Extraktion aus HTML fehlgeschlagen: ${err.message}`);
-    steps.push({ step: 2, name: 'CSS-Token-Extraktion', status: 'warning', error: err.message });
+  // ════════════════════════════════════════════
+  // STEP 2+10: CSS-Token-Extraktion + Fonts (PARALLEL)
+  // ════════════════════════════════════════════
+
+  log.step('Steps 2+10/14: CSS-Token-Extraktion + Fonts (parallel)...');
+
+  tokenMapPath = path.join(tokensDir, 'token-mapping.json');
+  const fontResPath = path.join(tokensDir, 'font-resolution.json');
+
+  const parallelResults = await runParallel([
+    {
+      command: nodeBin,
+      args: [
+        path.join(pipelineDir, 'scripts', 'extract-framer-css-tokens.js'),
+        '--html', exportHtml,
+        '--output', tokenMapPath,
+        ...(verbose ? ['--verbose'] : []),
+      ],
+      description: 'CSS-Token-Extraktion',
+      cwd: pipelineDir,
+    },
+    {
+      command: nodeBin,
+      args: [
+        path.join(pipelineDir, 'scripts', 'resolve-fonts.js'),
+        '--html', exportHtml,
+        '--fonts-dir', path.join(assetsDir, 'fonts'),
+        '--output', fontResPath,
+      ],
+      description: 'resolve-fonts.js',
+      cwd: pipelineDir,
+      optional: true,
+    },
+  ]);
+
+  for (const r of parallelResults) {
+    steps.push({
+      step: r.description === 'CSS-Token-Extraktion' ? 2 : 10,
+      name: r.description,
+      status: r.ok ? 'ok' : 'warning',
+      error: r.error,
+    });
   }
 
   // ════════════════════════════════════════════
-  // STEP 3: Browser-Crawl-Fallback (if needed)
+  // STEP 3: Browser-Crawl-Fallback
   // ════════════════════════════════════════════
 
   let tokenMap = null;
@@ -228,7 +233,6 @@ export async function runPipeline({
         ...(verbose ? ['--verbose'] : []),
       ], 'Browser-Crawl-Fallback', pipelineDir);
 
-      // Re-read token map
       tokenMap = JSON.parse(await fs.readFile(tokenMapPath, 'utf8'));
       const newMapped = Object.keys(tokenMap?.colors || {}).length;
       log.success(`Fallback: ${newMapped} tokens mapped (was ${mappedCount})`);
@@ -243,12 +247,10 @@ export async function runPipeline({
   }
 
   // ════════════════════════════════════════════
-  // STEPS 4-5: Unframer MCP (delegated to agent)
+  // STEPS 4-5: Unframer MCP (delegated)
   // ════════════════════════════════════════════
 
   log.info('Steps 4-5/14: Unframer MCP — an Agent delegiert');
-  log.info('  → getProjectXml + getNodeXml(sections)');
-  log.info('  → MCP: mcp.unframer.co mit 4 Tools');
   steps.push({ step: 4, name: 'Unframer getProjectXml', status: 'delegated' });
   steps.push({ step: 5, name: 'Unframer getNodeXml', status: 'delegated' });
 
@@ -288,72 +290,62 @@ export async function runPipeline({
   }
   steps.push({ step: 7, name: 'Token-Mapping erstellen', status: mappingValid ? 'ok' : 'warning' });
 
-  // Validate critical tokens exist
   const criticalPaths = ['/Theme Color/Very Dark Green', '/Theme Color/White', '/Theme Color/Black'];
   const missingCritical = criticalPaths.filter(p => !tokenMap?.colors?.[p]);
   if (missingCritical.length > 0) {
     log.warn(`Kritische Token-Pfade ohne Mapping: ${missingCritical.join(', ')}`);
     steps.push({ step: 8, name: 'Token-Mapping validieren', status: 'warning', detail: `Missing: ${missingCritical.join(', ')}` });
   } else {
-    log.success('Kritische Token-Pfade alle gemappt.');
     steps.push({ step: 8, name: 'Token-Mapping validieren', status: 'ok' });
   }
 
   // ════════════════════════════════════════════
-  // STEP 9: Design System aufbauen
+  // STEP 9: Design System aufbauen (WITH OUTPUT DEDUP)
   // ════════════════════════════════════════════
 
   log.step('Step 9/14: Design System aufbauen...');
 
-  designSystemDir = path.join(exportDir, 'design-system');
-  await fs.mkdir(designSystemDir, { recursive: true });
+  const dsVarsPath = path.join(designSystemDir, 'variables.json');
 
-  try {
-    await runFile(nodeBin, [
-      path.join(pipelineDir, 'scripts', 'design-system-builder.js'),
-      '--token-map', tokenMapPath,
-      '--output-dir', designSystemDir,
-      ...(verbose ? ['--verbose'] : []),
-    ], 'Design System Builder', pipelineDir);
-
-    const varsPath = path.join(designSystemDir, 'variables.json');
-    const classesPath = path.join(designSystemDir, 'global-classes.json');
-
-    let varCount = 0, classCount = 0;
+  // Output dedup: skip if variables.json is newer than token-mapping.json
+  let dsSkipped = false;
+  if (existsSync(dsVarsPath) && existsSync(tokenMapPath)) {
     try {
-      const vars = JSON.parse(await fs.readFile(varsPath, 'utf8'));
-      varCount = vars.meta?.total || vars.variables?.length || 0;
-    } catch {}
-    try {
-      const cls = JSON.parse(await fs.readFile(classesPath, 'utf8'));
-      classCount = cls.meta?.total || cls.classes?.length || 0;
-    } catch {}
-
-    log.success(`Design System: ${varCount} variables, ${classCount} global classes`);
-    steps.push({ step: 9, name: 'Design System', status: 'ok', detail: `${varCount}v + ${classCount}c` });
-  } catch (err) {
-    log.warn(`Design System Builder fehlgeschlagen: ${err.message}`);
-    steps.push({ step: 9, name: 'Design System', status: 'warning', error: err.message });
+      const dsStat = await fs.stat(dsVarsPath);
+      const tokStat = await fs.stat(tokenMapPath);
+      if (dsStat.mtimeMs >= tokStat.mtimeMs) {
+        log.success('Design System: cached (output is fresh)');
+        steps.push({ step: 9, name: 'Design System', status: 'cached' });
+        dsSkipped = true;
+      }
+    } catch { /* fall through to rebuild */ }
   }
 
-  // ════════════════════════════════════════════
-  // STEP 10: resolve-fonts.js
-  // ════════════════════════════════════════════
+  if (!dsSkipped) {
+    try {
+      await runFile(nodeBin, [
+        path.join(pipelineDir, 'scripts', 'design-system-builder.js'),
+        '--token-map', tokenMapPath,
+        '--output-dir', designSystemDir,
+        ...(verbose ? ['--verbose'] : []),
+      ], 'Design System Builder', pipelineDir);
 
-  log.step('Step 10/14: Fonts aufloesen...');
+      let varCount = 0, classCount = 0;
+      try {
+        const vars = JSON.parse(await fs.readFile(dsVarsPath, 'utf8'));
+        varCount = vars.meta?.total || vars.variables?.length || 0;
+      } catch {}
+      try {
+        const classes = JSON.parse(await fs.readFile(path.join(designSystemDir, 'global-classes.json'), 'utf8'));
+        classCount = classes.meta?.total || classes.classes?.length || 0;
+      } catch {}
 
-  const fontResPath = path.join(tokensDir, 'font-resolution.json');
-  try {
-    await runFile(nodeBin, [
-      path.join(pipelineDir, 'scripts', 'resolve-fonts.js'),
-      '--html', exportHtml,
-      '--fonts-dir', path.join(exportDir, 'assets', 'fonts'),
-      '--output', fontResPath,
-    ], 'resolve-fonts.js', pipelineDir);
-    steps.push({ step: 10, name: 'resolve-fonts.js', status: 'ok' });
-  } catch (err) {
-    log.warn(`resolve-fonts.js fehlgeschlagen: ${err.message}`);
-    steps.push({ step: 10, name: 'resolve-fonts.js', status: 'warning', error: err.message });
+      log.success(`Design System: ${varCount} variables, ${classCount} global classes`);
+      steps.push({ step: 9, name: 'Design System', status: 'ok', detail: `${varCount}v + ${classCount}c` });
+    } catch (err) {
+      log.warn(`Design System Builder fehlgeschlagen: ${err.message}`);
+      steps.push({ step: 9, name: 'Design System', status: 'warning', error: err.message });
+    }
   }
 
   // ════════════════════════════════════════════
@@ -362,17 +354,15 @@ export async function runPipeline({
 
   log.step('Step 11/14: XML → V4 Tree konvertieren...');
 
-  // Find XML files in export dir
   let xmlFiles = [];
   try {
     const entries = await fs.readdir(exportDir, { withFileTypes: true, recursive: true });
     xmlFiles = entries
       .filter(e => e.isFile() && e.name.endsWith('.xml'))
       .map(e => path.join(e.parentPath || path.dirname(path.join(exportDir, e.name)), e.name))
-      .slice(0, 5); // Max 5 top-level XML files
+      .slice(0, 5);
   } catch { xmlFiles = []; }
 
-  // Also check tools/framer-export for XML
   const framerToolsDir = path.join(rootDir, 'tools', 'framer-export');
   if (xmlFiles.length === 0 && existsSync(framerToolsDir)) {
     try {
@@ -388,7 +378,6 @@ export async function runPipeline({
   v4TreePath = path.join(outputDir, 'elements.json');
 
   if (xmlFiles.length > 0) {
-    // Use the updated token-mapping for GV-IDs
     const updatedTokenMap = path.join(designSystemDir, 'token-mapping-updated.json');
     const tokenMapArg = existsSync(updatedTokenMap) ? updatedTokenMap : tokenMapPath;
 
@@ -413,81 +402,37 @@ export async function runPipeline({
     steps.push({ step: 11, name: 'convert-xml-to-v4.js', status: convertResults.every(r => r.status === 'ok') ? 'ok' : 'warning', detail: convertResults });
   } else {
     log.warn('Keine XML-Dateien gefunden. Überspringe V4-Konvertierung.');
-    log.info('  → XML-Dateien sollten in tools/framer-export/ oder im Export-Verzeichnis liegen.');
     steps.push({ step: 11, name: 'convert-xml-to-v4.js', status: 'skipped', detail: 'No XML files found' });
   }
 
   // ════════════════════════════════════════════
-  // STEP 12: framer-pre-build-validate.js
+  // STEPS 12+14: Validate + QA Gate (PARALLEL)
   // ════════════════════════════════════════════
 
-  log.step('Step 12/14: Pre-Build-Validation (17 Guards)...');
-
   if (v4TreePath && existsSync(v4TreePath)) {
+    log.step('Steps 12+14/14: Validation + QA Gate (parallel)...');
+
     const preBuildReportPath = path.join(outputDir, 'pre-build-validation.json');
-    try {
-      await runFile(nodeBin, [
+    const qaDir = path.join(exportDir, 'qa');
+    await fs.mkdir(qaDir, { recursive: true });
+
+    const postValidationTasks = [];
+
+    // Task: Pre-Build Validation
+    postValidationTasks.push({
+      command: nodeBin,
+      args: [
         path.join(pipelineDir, 'scripts', 'framer-pre-build-validate.js'),
         '--tree', v4TreePath,
         '--tokens', tokenMapPath,
         '--output', preBuildReportPath,
-      ], 'Pre-Build-Validation', pipelineDir);
+      ],
+      description: 'Pre-Build-Validation',
+      cwd: pipelineDir,
+    });
 
-      let score = 0;
-      try {
-        const report = JSON.parse(await fs.readFile(preBuildReportPath, 'utf8'));
-        score = report.meta?.score || 0;
-        log.success(`Pre-Build: ${score}% (17 Guards)`);
-
-        if (score < 85) {
-          log.warn(`Score ${score}% < 85% — Build wird trotzdem fortgesetzt (Prüfung empfohlen).`);
-          steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'warning', score });
-        } else {
-          steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'ok', score });
-        }
-      } catch {
-        steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'ok' });
-      }
-    } catch (err) {
-      log.warn(`Pre-Build-Validation fehlgeschlagen: ${err.message}`);
-      steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'warning', error: err.message });
-    }
-  } else {
-    log.warn('Kein V4-Tree gefunden. Überspringe Pre-Build-Validation.');
-    steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'skipped' });
-  }
-
-  // ════════════════════════════════════════════
-  // STEP 13: elementor-set-content (MCP — delegated)
-  // ════════════════════════════════════════════
-
-  if (dryRun) {
-    log.info('Step 13/14: elementor-set-content — DRY-RUN (kein MCP-Call)');
-    steps.push({ step: 13, name: 'elementor-set-content', status: 'dry-run' });
-  } else if (postId && v4TreePath && existsSync(v4TreePath)) {
-    log.info('Step 13/14: elementor-set-content — an Agent delegiert');
-    log.info(`  → MCP: novamira/elementor-set-content { post_id: ${postId} }`);
-    log.info(`  → Content: ${v4TreePath}`);
-    steps.push({ step: 13, name: 'elementor-set-content', status: 'delegated', detail: `post_id=${postId}` });
-  } else {
-    log.info('Step 13/14: elementor-set-content — übersprungen (kein post-id oder kein V4-Tree)');
-    steps.push({ step: 13, name: 'elementor-set-content', status: 'skipped' });
-  }
-
-  // ════════════════════════════════════════════
-  // STEP 14: Visual QA + Auto-Fix
-  // ════════════════════════════════════════════
-
-  if (skipQa) {
-    log.info('Step 14/14: Visual QA + Auto-Fix — übersprungen (--skip-qa)');
-    steps.push({ step: 14, name: 'Visual QA + Auto-Fix', status: 'skipped' });
-  } else if (v4TreePath && existsSync(v4TreePath)) {
-    log.step('Step 14/14: Visual QA + Auto-Fix...');
-
-    const qaDir = path.join(exportDir, 'qa');
-    await fs.mkdir(qaDir, { recursive: true });
-
-    try {
+    // Task: Quality Gate (skip if --skip-qa)
+    if (!skipQa) {
       const gateArgs = [
         path.join(pipelineDir, 'scripts', 'build-quality-gate.js'),
         '--tree', v4TreePath,
@@ -499,24 +444,62 @@ export async function runPipeline({
       ];
       if (postId) gateArgs.push('--post-id', postId);
 
-      await runFile(nodeBin, gateArgs, 'Build Quality Gate', pipelineDir);
+      postValidationTasks.push({
+        command: nodeBin,
+        args: gateArgs,
+        description: 'Visual QA + Auto-Fix',
+        cwd: pipelineDir,
+        optional: true,
+      });
+    }
 
-      const gateReportPath = path.join(qaDir, 'quality-gate-report.json');
-      let gateStatus = 'ok';
+    const postResults = await runParallel(postValidationTasks);
+
+    // Process Pre-Build result
+    const preResult = postResults.find(r => r.description === 'Pre-Build-Validation');
+    if (preResult?.ok) {
+      let score = 0;
       try {
-        const gateReport = JSON.parse(await fs.readFile(gateReportPath, 'utf8'));
-        gateStatus = gateReport.summary?.status || 'ok';
-        log.success(`QA-Gate: ${gateStatus}`);
-      } catch {}
+        const report = JSON.parse(await fs.readFile(preBuildReportPath, 'utf8'));
+        score = report.meta?.score || 0;
+        log.success(`Pre-Build: ${score}% (17 Guards)`);
+        steps.push({ step: 12, name: 'Pre-Build-Validation', status: score >= 85 ? 'ok' : 'warning', score });
+      } catch {
+        steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'ok' });
+      }
+    } else {
+      steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'warning', error: preResult?.error });
+    }
 
-      steps.push({ step: 14, name: 'Visual QA + Auto-Fix', status: gateStatus === 'BLOCKED' ? 'warning' : 'ok' });
-    } catch (err) {
-      log.warn(`QA-Gate fehlgeschlagen: ${err.message}`);
-      steps.push({ step: 14, name: 'Visual QA + Auto-Fix', status: 'warning', error: err.message });
+    // Process QA Gate result
+    const qaResult = postResults.find(r => r.description === 'Visual QA + Auto-Fix');
+    if (!skipQa) {
+      if (qaResult?.ok) {
+        steps.push({ step: 14, name: 'Visual QA + Auto-Fix', status: 'ok' });
+      } else if (qaResult) {
+        steps.push({ step: 14, name: 'Visual QA + Auto-Fix', status: 'warning', error: qaResult.error });
+      }
+    } else {
+      steps.push({ step: 14, name: 'Visual QA + Auto-Fix', status: 'skipped' });
     }
   } else {
-    log.info('Step 14/14: Visual QA + Auto-Fix — übersprungen (kein V4-Tree)');
+    log.warn('Kein V4-Tree gefunden. Überspringe Validation + QA.');
+    steps.push({ step: 12, name: 'Pre-Build-Validation', status: 'skipped' });
     steps.push({ step: 14, name: 'Visual QA + Auto-Fix', status: 'skipped' });
+  }
+
+  // ════════════════════════════════════════════
+  // STEP 13: elementor-set-content (MCP — delegated)
+  // ════════════════════════════════════════════
+
+  if (dryRun) {
+    log.info('Step 13/14: elementor-set-content — DRY-RUN');
+    steps.push({ step: 13, name: 'elementor-set-content', status: 'dry-run' });
+  } else if (postId && v4TreePath && existsSync(v4TreePath)) {
+    log.info('Step 13/14: elementor-set-content — an Agent delegiert');
+    steps.push({ step: 13, name: 'elementor-set-content', status: 'delegated', detail: `post_id=${postId}` });
+  } else {
+    steps.push({ step: 13, name: 'elementor-set-content', status: 'skipped' });
   }
 
   // ════════════════════════════════════════════
@@ -530,7 +513,7 @@ export async function runPipeline({
   const failSteps = steps.filter(s => s.status === 'failed').length;
 
   const summary = {
-    pipeline: '14-step',
+    pipeline: '14-step-optimized',
     generated: new Date().toISOString(),
     elapsed_seconds: parseFloat(elapsed),
     framer_url: framerUrl,
@@ -556,9 +539,9 @@ export async function runPipeline({
       token_mapping: tokenMapPath,
       design_system: designSystemDir,
       v4_tree: v4TreePath,
-      variables: designSystemDir ? path.join(designSystemDir, 'variables.json') : null,
-      global_classes: designSystemDir ? path.join(designSystemDir, 'global-classes.json') : null,
-      batch_create_plan: designSystemDir ? path.join(designSystemDir, 'batch-create-plan.json') : null,
+      variables: path.join(designSystemDir, 'variables.json'),
+      global_classes: path.join(designSystemDir, 'global-classes.json'),
+      batch_create_plan: path.join(designSystemDir, 'batch-create-plan.json'),
       font_resolution: fontResPath,
       qa_report: skipQa ? null : path.join(exportDir, 'qa', 'quality-gate-report.json'),
     },

@@ -25,7 +25,7 @@ import fs   from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -84,6 +84,64 @@ function runScript(scriptName, scriptArgs, { optional = false } = {}) {
   };
 }
 
+/** Run a single script asynchronously (real parallelism via spawn). */
+function runScriptAsync(scriptName, scriptArgs, { optional = false } = {}) {
+  return new Promise((resolve) => {
+    const scriptPath = path.join(__dirname, scriptName);
+    if (!fs.existsSync(scriptPath)) {
+      if (optional) return resolve({ ok: false, reason: 'Script not found', code: -1 });
+      return resolve({ ok: false, reason: `Script not found: ${scriptPath}`, code: -1 });
+    }
+
+    const child = spawn('node', [scriptPath, ...scriptArgs], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      signal: AbortSignal.timeout(60000),
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    child.on('close', (code) => {
+      let parsed = null;
+      try { if (stdout) parsed = JSON.parse(stdout); } catch {}
+      resolve({
+        ok: code === 0,
+        code,
+        stdout: stdout.slice(0, 2000),
+        stderr: stderr.slice(0, 2000),
+        parsed,
+      });
+    });
+
+    child.on('error', (err) => {
+      resolve({ ok: false, reason: err.message, code: -1 });
+    });
+  });
+}
+
+/** Run multiple analysis scripts in PARALLEL via Promise.allSettled. */
+async function runScriptBatch(taskDefs) {
+  const tasks = taskDefs.map(t => ({
+    name: t.name,
+    script: t.script,
+    args: t.args,
+    optional: t.optional,
+  }));
+
+  const settled = await Promise.allSettled(
+    tasks.map(t =>
+      runScriptAsync(t.script, t.args, { optional: t.optional })
+        .then(result => ({ name: t.name, result }))
+    )
+  );
+
+  return settled
+    .filter(r => r.status === 'fulfilled')
+    .map(r => r.value);
+}
+
 // ─────────────────────────────────────────────
 // STEP 1: Pre-Build Validation (12 Guards)
 // ─────────────────────────────────────────────
@@ -108,58 +166,46 @@ if (preBuildScore >= minScore && preBuildResult.ok) {
 results.push({ step: 'pre-build-validate', score: preBuildScore, passed: preBuildScore >= minScore, report: preBuildResult.parsed });
 
 // ─────────────────────────────────────────────
-// STEP 2: Quality Metrics
+// STEPS 2-4: Quality Metrics + Validation + Binding (PARALLEL)
 // ─────────────────────────────────────────────
 
-log('Step 2/6: Quality Metrics...');
+log('Steps 2-4/6: Quality Metrics + Structural Validation + Binding (batch)...');
 
-const metricsResult = runScript('measure-quality-metrics.js', [
-  args.tree,
-  '--output', path.join(outDir, 'quality-metrics.json'),
-], { optional: true });
+const parallelTasks = [
+  { name: 'quality-metrics', script: 'measure-quality-metrics.js', args: [args.tree, '--output', path.join(outDir, 'quality-metrics.json')], optional: true },
+  { name: 'structural-validation', script: 'validate-v4-tree.js', args: [args.tree, '--mode=warn', '--output', path.join(outDir, 'validate-report.json')], optional: false },
+  { name: 'build-binding', script: 'verify-build-binding.js', args: [args.tree], optional: false },
+];
 
-if (metricsResult.ok) {
-  const m = metricsResult.parsed?.metrics;
-  ok(`Metrics: DOM depth ${m?.dom_depth?.value || '?'}, GC ${m?.gc_coverage?.value || '?'}%, GV ${m?.gv_color_substitution?.value || '?'}%`);
-} else {
-  warn('Quality metrics failed (optional).');
+// Steps 2-4 run in PARALLEL (async spawn + Promise.allSettled)
+const parallelResults = await runScriptBatch(parallelTasks);
+
+for (const { name, result } of parallelResults) {
+  if (name === 'quality-metrics') {
+    if (result.ok) {
+      const m = result.parsed?.metrics;
+      ok(`Metrics: DOM depth ${m?.dom_depth?.value || '?'}, GC ${m?.gc_coverage?.value || '?'}%, GV ${m?.gv_color_substitution?.value || '?'}%`);
+    } else {
+      warn('Quality metrics failed (optional).');
+    }
+    results.push({ step: 'quality-metrics', passed: result.ok, report: result.parsed });
+  } else if (name === 'structural-validation') {
+    const validateScore = result.parsed?.score || 0;
+    if (validateScore >= minScore) {
+      ok(`Validate: ${validateScore}%`);
+    } else {
+      warn(`Validate: ${validateScore}% (below threshold but not blocking)`);
+    }
+    results.push({ step: 'structural-validation', score: validateScore, passed: validateScore >= minScore, report: result.parsed });
+  } else if (name === 'build-binding') {
+    if (result.ok) {
+      ok('Build Binding: All styles bound');
+    } else {
+      warn('Build Binding: Unbound styles detected');
+    }
+    results.push({ step: 'build-binding', passed: result.ok });
+  }
 }
-results.push({ step: 'quality-metrics', passed: metricsResult.ok, report: metricsResult.parsed });
-
-// ─────────────────────────────────────────────
-// STEP 3: Structural Validation
-// ─────────────────────────────────────────────
-
-log('Step 3/6: Structural Validation (validate-v4-tree)...');
-
-const validateResult = runScript('validate-v4-tree.js', [
-  args.tree,
-  '--mode=warn',
-  '--output', path.join(outDir, 'validate-report.json'),
-]);
-
-const validateScore = validateResult.parsed?.score || 0;
-if (validateScore >= parseInt(args['min-score'])) {
-  ok(`Validate: ${validateScore}%`);
-} else {
-  warn(`Validate: ${validateScore}% (below threshold but not blocking)`);
-}
-results.push({ step: 'structural-validation', score: validateScore, passed: validateScore >= minScore, report: validateResult.parsed });
-
-// ─────────────────────────────────────────────
-// STEP 4: Build Binding Check
-// ─────────────────────────────────────────────
-
-log('Step 4/6: Build Binding (Invariant I)...');
-
-const bindingResult = runScript('verify-build-binding.js', [args.tree]);
-
-if (bindingResult.ok) {
-  ok('Build Binding: All styles bound');
-} else {
-  warn('Build Binding: Unbound styles detected');
-}
-results.push({ step: 'build-binding', passed: bindingResult.ok });
 
 // ─────────────────────────────────────────────
 // STEP 5: Section Compare (Screenshot Diff)
