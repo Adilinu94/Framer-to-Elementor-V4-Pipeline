@@ -14,9 +14,23 @@
  *   4. Generiert ein enriched token-mapping.json
  *
  * Usage:
+ *   # Project-agnostic (no color map):
  *   node scripts/generate-color-token-mapping.js \
  *     --token-map tokens/token-mapping.json \
  *     --output tokens/token-mapping.json
+ *
+ *   # With project-specific color map:
+ *   node scripts/generate-color-token-mapping.js \
+ *     --token-map tokens/token-mapping.json \
+ *     --color-map exports/my-project/color-map.json \
+ *     --output tokens/token-mapping.json
+ *
+ *   # color-map.json format:
+ *   {
+ *     "#061d13": "/Theme Color/Very Dark Green",
+ *     "#ffffff": "/Theme Color/White",
+ *     ...
+ *   }
  */
 
 import fs from 'node:fs';
@@ -27,6 +41,7 @@ import { createHash } from 'node:crypto';
 const { values: args } = parseArgs({
   options: {
     'token-map': { type: 'string' },
+    'color-map': { type: 'string' },  // optional: project-specific hex→framer-path JSON
     output:      { type: 'string' },
     verbose:     { type: 'boolean', default: false },
     'dry-run':   { type: 'boolean', default: false },
@@ -40,35 +55,34 @@ if (!args['token-map']) {
 }
 
 const log = (...m) => { if (args.verbose) process.stderr.write('[color-map] ' + m.join(' ') + '\n'); };
+const warn = (...m) => process.stderr.write('\u26a0 ' + m.join(' ') + '\n');
 
 const tokenMap = JSON.parse(fs.readFileSync(args['token-map'], 'utf8'));
 
-// ── Step 1: Build hex → semantic color name mapping ──────────────────
+// ── Step 1: Load project-specific color map (optional) ─────────────
 
-// Color names detected on the live page (from brand/theme analysis)
-// These map hex values to Framer theme color names
-const HEX_TO_FRAMER_PATH = {
-  '#061d13': '/Theme Color/Very Dark Green',
-  '#0e2a3b': '/Theme Color/Dark Blue', 
-  '#dfffa3': '/Theme Color/Light Lime Green',
-  '#ffffff': '/Theme Color/White',
-  '#fff':     '/Theme Color/White',
-  '#0b0b0b': '/Theme Color/Black',
-  '#f3f3f3': '/Theme Color/Light Gray',
-  '#1a3127': '/Theme Color/Dark Green',
-  '#ffde26': '/Theme Color/Yellow',
-  '#c2c2c2': '/Theme Color/Gray',
-  '#505050': '/Theme Color/Medium Gray',
-  '#3e3e3e': '/Theme Color/Dark Gray',
-  '#6f6f6f': '/Theme Color/Text Gray',
-  '#edfdf6': '/Theme Color/Mint',
-  '#d4e3dd': '/Theme Color/Sage',
-  '#efefef': '/Theme Color/Off White',
-  '#ff2244': '/Theme Color/Red',
-  '#000000': '/Theme Color/Black',
-  '#0099ff': '/Theme Color/Link Blue',
-  '#f8f8f8': '/Theme Color/Near White',
-};
+// For project-agnostic operation, provide a --color-map JSON file:
+//   {"#hexcolor": "/Framer Path/Color Name", ...}
+// Without --color-map, all unmapped colors get generic /Custom Color/ paths.
+//
+// Example (MasterCare):
+//   {
+//     "#061d13": "/Theme Color/Very Dark Green",
+//     "#ffffff": "/Theme Color/White",
+//     "#0b0b0b": "/Theme Color/Black"
+//   }
+
+let HEX_TO_FRAMER_PATH = {};
+if (args['color-map']) {
+  if (fs.existsSync(args['color-map'])) {
+    HEX_TO_FRAMER_PATH = JSON.parse(fs.readFileSync(args['color-map'], 'utf8'));
+    log(`Loaded ${Object.keys(HEX_TO_FRAMER_PATH).length} color mappings from ${args['color-map']}`);
+  } else {
+    warn(`Color map not found: ${args['color-map']}. Using generic paths.`);
+  }
+} else {
+  log('No --color-map provided. Using generic /Custom Color/ paths for all unmapped colors.');
+}
 
 // ── Step 2: Process unmapped tokens → Framer paths + GV-IDs ─────────
 
@@ -130,28 +144,22 @@ for (const token of unmappedColors) {
   }
 }
 
-// ── Step 3: Add critical paths that were mentioned in converter warnings ──
+// ── Step 3: Auto-detect critical unmapped Framer paths from token-mapping ──
 
-const CRITICAL_PATHS_FROM_WARNINGS = [
-  '/Theme Color/Very Dark Green',
-  '/Theme Color/White', 
-  '/Theme Color/Black',
-  '/Theme Color/Dark Green',
-  '/Theme Color/Light Lime Green',
-  '/White/White',
-  '/Heading/Heading 1 b',
-  '/Body/Body-14px-Semibold',
-  '/Body/Body-20px-Regular',
-  '/Body/Body-18px-Medium',
-];
+// Scan existing colors + converter warnings for paths referenced but not yet mapped.
+// This is project-agnostic: it reads what's already in the token-map, not hardcoded names.
+const criticalPaths = [];
+if (tokenMap.critical_paths) {
+  criticalPaths.push(...tokenMap.critical_paths);
+}
 
 // Ensure critical paths are mapped (even if not from CSS vars)
-for (const criticalPath of CRITICAL_PATHS_FROM_WARNINGS) {
+for (const criticalPath of criticalPaths) {
   if (!colors[criticalPath]) {
-    // These are textStyle paths, not colors — skip non-color paths
+    // Skip textStyle paths (not colors)
     if (criticalPath.startsWith('/Heading/') || criticalPath.startsWith('/Body/')) continue;
     if (criticalPath.startsWith('/White/')) {
-      // White color reference
+      // White color reference — map to #ffffff
       const whiteHex = '#ffffff';
       if (!gvMap.has(whiteHex)) {
         gvMap.set(whiteHex, 'e-gv-' + createHash('sha256').update('white').digest('hex').slice(0, 8));
