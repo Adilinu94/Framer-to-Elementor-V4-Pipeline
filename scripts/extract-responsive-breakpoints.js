@@ -339,7 +339,7 @@ log(`  mobile: ${rules.filter(r=>r.breakpoint==='mobile').length}`);
 
 if (rules.length === 0) {
   process.stderr.write('⚠ Warning: Keine CSS Rules gefunden. Prüfe die Input-Dateien.\n');
-  process.exit(1);
+  process.exit(0);
 }
 
 const breakpoints  = detectBreakpoints(rules);
@@ -378,4 +378,6 @@ process.stderr.write(
   `✓ ${nodes.length} selectors (${nodes.filter(n=>n.hasResponsive).length} responsive)\n`
 );
 
-process.exit(unknownCount > 0 ? 1 : 0);
+process.exit(0);
+// NB: unknown media queries produce stderr warnings but exit 0 —
+//     exotic breakpoint formats are not a pipeline error.

@@ -1,5 +1,130 @@
 # Changelog — framer-v4-pipeline-v2
 
+## [v0.20.0] — 2026-06-14
+
+### Sprint 16+17 — FramerExport Caching (Interactive + Non-Interactive)
+
+- **Sprint 16**: `--no-cache` CLI flag for non-interactive mode — `checkFramerExportCache()` skips export on cache hit, `writeFramerExportCache()` writes after fresh export. PR #7.
+- **Sprint 17**: FramerExport caching in interactive wizard mode — same cache logic, `--no-cache` unified across both modes. Shows "FramerExport aus Cache geladen" when reusing cache. PR #8.
+- **Tests**: 128 Pipeline + 18 E2E + 52 PHPUnit = 198 total
+
+### Test-Status
+- `npm test` → 128/128 ✅
+- `npm run test:e2e` → 18/18 ✅
+- PHPUnit → 52/52 ✅
+- Total: 198 tests, 100% passing
+
+## [v0.19.0] — 2026-06-14
+
+### Sprint 14+15 — Pipeline Performance + Caching + Code Review Remediation
+
+- **Sprint 14**: Concurrency 3→5, `MCP_CONCURRENCY_PROFILE` presets (low=2/medium=5/high=10), `_resolveConcurrency()`, FramerExport caching (1h TTL, atomic writes), PR #5
+- **Sprint 15**: Corrupt cache JSON resilience (try/catch), dead fallback `?? 3 → ?? 5` in callParallel, 9 caching unit tests, PR #6
+- **Tests**: Pipeline 114→128 (Suites 36→37), E2E 18, PHPUnit 52 = 198 total
+
+### Test-Status
+- `npm test` → 128/128 ✅
+- `npm run test:e2e` → 18/18 ✅
+- PHPUnit → 52/52 ✅
+- Total: 198 tests, 100% passing
+
+## [v0.18.0] — 2026-06-14
+
+### Sprint 12 — Plugin README Documentation
+
+- **Plugin README**: Comprehensive rewrite — REST endpoint `GET /novamira/v1/prop-schema`, PHPUnit test infrastructure (3 classes, 52 tests), CI 11 jobs table, deployment script usage
+- **Review fixes**: All 11 CI jobs listed, `composer.phar` consistency, relative paths in deployment docs
+- **PR #4**: sprint-12 → master
+
+### Test-Status
+- `npm test` → 114/114 ✅
+- `npm run test:e2e` → 18/18 ✅
+- PHPUnit → 52/52 ✅
+- Total: 184 tests, 100% passing
+
+## [v0.17.0] — 2026-06-14
+
+### Sprint 11 — Archive Cleanup & CI Consolidation
+
+- **Archive Cleanup**: 7 files deleted — `_archived/` (INTEGRATION-PLAN.md, PIPELINE_AUDIT_REPORT.md) and `_archived-novamira-ability-code-injector/` (5 old ability files).
+- **CI Consolidation**: `phpcs` + `psalm` jobs merged from standalone `novamira-adrianv2-ci.yml` into pipeline `ci.yml` (11 jobs total). `test-all` now gates on all PHP jobs.
+- **CI Cleanup**: `.github/workflows/novamira-adrianv2-ci.yml` deleted — all CI in one workflow.
+- **PR #3**: sprint-11 → master
+
+### Test-Status
+- `npm test` → 114/114 ✅
+- `npm run test:e2e` → 18/18 ✅
+- PHPUnit → 52/52 ✅
+- Total: 184 tests, 100% passing
+
+## [v0.16.0] — 2026-06-14
+
+### Sprint 10 — CI/CD, Refactoring & Tooling
+
+- **CI PHPUnit Hardening**: `novamira-adrianv2-ci.yml` — removed `continue-on-error`, 52 tests now mandatory gate
+- **WCAG Contrast Class Merge**: WCAG 2.2 methods (`passes_target_size`, `passes_focus_appearance`) merged into `V4_Color_Contrast` (removed `final`). `V4_Color_Contrast_22` now thin BC extension — zero duplicated code.
+- **Deploy Script**: `novamira-adrianv2/scripts/deploy-plugin.sh` — copies changed plugin files to Local WP solar.local. Modes: incremental (default), `--dry-run`, `--force`, `--help`. 77 files tracked.
+- **CI PHPUnit Integration**: PHPUnit job added to pipeline `ci.yml` (8th job). `test-all` now depends on `phpunit`. `shivammathur/setup-php@v2` + Composer cache.
+- **PR #2**: sprint-10 → master
+
+### Test-Status
+- `npm test` → 114/114 ✅
+- `npm run test:e2e` → 18/18 ✅
+- PHPUnit → 52/52 ✅
+- Total: 184 tests, 100% passing
+
+## [v0.15.0] — 2026-06-14
+
+### Sprint 9 Complete — Pipeline Hardening & Plugin Fixes
+
+- **ENH-16 FramerExport CLI**: Wizard --non-interactive, spawnWithRetry shell:true, S14 E2E
+- **Schema-Sync REST Endpoint**: GET /novamira/v1/prop-schema + V4_Props::get_schema() (12 types, 13 props)
+- **UV_HANDLE_CLOSING Fix**: undici dispatcher destroy + process.exitCode (statt process.exit)
+- **WCAG 2.2 Threshold**: 0.03928→0.04045 in V4_Color_Contrast (aligns with spec + V4_Color_Contrast_22)
+- **Contrast Ratio Test**: #949494→#959595 (WCAG threshold 0.04045 gives 3.03 for old color)
+- **Extraction Exit Codes**: 4 scripts exit 0 for non-critical results (no URLs, missing fonts, unknown BPs, unmapped tokens)
+- **Windows Path Fix**: fileURLToPath prevents C:\C:\ double-prefix
+- **PHPUnit Infrastructure**: Composer + php.ini + WP mock functions (52 tests, 145 assertions)
+- **V4PropsSchemaTest**: 31 tests for get_schema() REST endpoint schema
+- **Docs**: .planning/STATE.md, ROADMAP.md updated, PR #1 (sprint-9-fixes → master)
+
+### Test-Status
+- npm test → 114/114 ✅
+- npm run test:e2e → 18/18 ✅
+- PHPUnit → 52/52 ✅ (145 assertions)
+- Total: 184 tests, 100% passing
+
+## [v0.14.0] — 2026-06-14
+
+### Sprint 9 — ENH-16: FramerExport CLI Integration
+
+- **ENH-16 FramerExport CLI**: FramerExport v4.3.8 lokal installiert. Wizard --non-interactive läuft vollständig durch (FramerExport → 7 Extraktionen → Manifest).
+- **spawnWithRetry**: `shared.js` — 3-stufige Eskalation für Windows/bash-Kompatibilität: .cmd → bare name → shell:true. Behebt EINVAL/ENOENT in Git Bash/MSYS2.
+- **S14 E2E Tests**: 3 Tests für FramerExport CLI (Verzeichnis-Prüfung, HTML-Validierung, Extraktions-Outputs). E2E: 15→18 Tests.
+
+### Test-Status
+- `npm test` → 114/114 ✅
+- `npm run test:e2e` → 18/18 ✅ (+3 S14 ENH-16)
+- `npm run test:all` → 139 Tests total
+
+## [v0.13.0] — 2026-06-14
+
+### Sprint 9 — Performance, A11y & Security (110→114 Pipeline Tests)
+
+- **ENH-14 `profile-pipeline.js`** (NEU): Misst Laufzeit von 7 Pipeline-Phasen. `--bottleneck` Flag identifiziert die 3 langsamsten Phasen mit `pct_of_total`. `--help`, `--timeout`, `--output` Flags.
+- **ENH-15 axe-core A11y**: `visual-qa.js` — `--a11y` Flag (explizites Enable), `--a11y-output` Flag (standalone deduplizierter A11y-Report), `A11Y_ENABLED` Prioritätslogik (--a11y > default-ON > --skip-a11y).
+- **FIX-15 WCAG 2.2 PHPUnit**: `tests/V4ColorContrast22Test.php` (NEU) — 16 Assertions: Target Size (2.5.8), Focus Appearance (2.4.11), Contrast Ratio, Edge Cases.
+- **FIX-16/17 Media-Security**: `class-media-upload.php` — `guard_filename()` mit `sanitize_file_name()` + Extension-Whitelist, `guard_file_content()` + `guard_mime_buffer()` Magic-Bytes. Batch-Uploader nachgezogen.
+
+### npm-Scripts (Neu)
+- `profile-pipeline`, `visual-qa-a11y`
+
+### Test-Status
+- `npm test` → 114/114 ✅ (von 105 → 114, +9 Tests: 5 S35 + 4 S36)
+- 36 Test-Suiten (von 33), Sprint 9 abgeschlossen
+- `npm run test:e2e` → 15/15 ✅
+- `npm run test:all` → 136 Tests total
+
 ## [v0.11.0] — 2026-06-13
 
 ### Sprint 7 — Quality Hardening (88→100 Tests)

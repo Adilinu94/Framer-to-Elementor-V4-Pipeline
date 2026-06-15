@@ -1,383 +1,320 @@
 Node xml:
-<Desktop
-    nodeId="FeaturesSection01"
-    position="absolute"
-    width="1200px"
-    height="fit-content"
-    top="0px"
-    left="0px"
-    <!-- background color string or project color style path (if starts with /) -->
-    backgroundColor="/Neutral/01"
-    overflow="clip"
-    layout="stack"
-    stackDirection="vertical"
-    stackDistribution="start"
-    stackAlignment="center"
->
-  <FeaturesSection
-      nodeId="Feat01Main"
+<Desktop nodeId="WQLkyLRf1">
+  <HeroSection
+      nodeId="zLVHvcg7l"
       width="1fr"
       height="fit-content"
+      <!-- background color string or project color style path (if starts with /) -->
+      backgroundColor="/Theme Color/Very Dark Green"
       overflow="clip"
       layout="stack"
-      gap="60px"
-      padding="100px 40px 100px 40px"
+      gap="10px"
+      padding="151px 30px 112px 30px"
       stackDirection="vertical"
-      stackDistribution="start"
+      stackDistribution="center"
       stackAlignment="center"
   >
-    <SectionHeader
-        nodeId="FeatHdr01"
+    <Container
+        nodeId="y5TwZSx9H"
         width="1fr"
         height="fit-content"
-        maxWidth="700px"
-        overflow="clip"
+        maxWidth="1280px"
+        overflow="visible"
         layout="stack"
-        gap="16px"
+        gap="10px"
         stackDirection="vertical"
-        stackDistribution="start"
+        stackDistribution="center"
         stackAlignment="center"
     >
-      <EyebrowLabel
-          nodeId="FeatEyebrow01"
-          width="fit-content"
-          height="fit-content"
-          <!-- project text style path, always starts with / -->
-          inlineTextStyle="/Body/Body S Strong"
-      >
-        FEATURES
-      </EyebrowLabel>
-      <SectionTitle
-          nodeId="FeatTitle01"
+      <Content
+          nodeId="sukbr6QOL"
           width="1fr"
           height="fit-content"
-          <!-- project text style path, always starts with / -->
-          inlineTextStyle="/Heading/H2"
-      >
-        Everything you need, nothing you don't.
-      </SectionTitle>
-      <SectionSubtitle
-          nodeId="FeatSubtitle01"
-          width="1fr"
-          height="fit-content"
-          <!-- project text style path, always starts with / -->
-          inlineTextStyle="/Body/Body M"
-      >
-        Thoughtfully crafted tools designed to simplify your workflow and amplify your output.
-      </SectionSubtitle>
-    </SectionHeader>
-    <FeatureGrid
-        nodeId="FeatGrid01"
-        width="1fr"
-        height="fit-content"
-        overflow="clip"
-        layout="grid"
-        gap="24px 24px"
-        gridColumns="3"
-        gridRows="2"
-        gridAlignment="center"
-        gridColumnWidthType="minmax"
-        gridColumnWidth="300"
-        gridColumnMinWidth="200"
-        gridRowHeightType="auto"
-        gridRowHeight="200"
-    >
-      <FeatureCard
-          nodeId="FeatCard01"
-          width="1fr"
-          height="fit-content"
-          <!-- background color string or project color style path (if starts with /) -->
-          backgroundColor="/Neutral/02"
-          borderRadius="16px"
-          overflow="clip"
+          overflow="visible"
           layout="stack"
-          gap="16px"
-          padding="32px 24px 32px 24px"
-          stackDirection="vertical"
+          gap="10px"
+          stackDirection="horizontal"
           stackDistribution="start"
-          stackAlignment="start"
+          stackAlignment="center"
       >
-        <IconWrapper
-            nodeId="FeatIcon01"
-            width="40px"
-            height="40px"
-            borderRadius="8px"
-            <!-- background color string or project color style path (if starts with /) -->
-            backgroundColor="/Accent/Blue/01"
+        <TextWrapper
+            nodeId="yFPDRpE9X"
+            width="1fr"
+            height="fit-content"
+            maxWidth="629px"
+            borderRadius="0px"
+            overflow="visible"
+            layout="stack"
+            gap="30px"
+            stackDirection="vertical"
+            stackDistribution="start"
+            stackAlignment="start"
+        >
+          <TitleWrapper
+              nodeId="IOnAZJS94"
+              width="1fr"
+              height="fit-content"
+              borderRadius="0px"
+              overflow="visible"
+              layout="stack"
+              gap="40px"
+              stackDirection="vertical"
+              stackDistribution="start"
+              stackAlignment="start"
+          >
+            <Text
+                nodeId="DRilRTnLU"
+                width="1fr"
+                height="fit-content"
+                borderRadius="0px"
+                overflow="visible"
+                layout="stack"
+                gap="16px"
+                stackDirection="vertical"
+                stackDistribution="start"
+                stackAlignment="start"
+            >
+              <TrustedByThousandsOfHomeowners
+                  nodeId="zsWvJY9LN"
+                  width="1fr"
+                  height="fit-content"
+                  <!-- project text style path, always starts with / -->
+                  inlineTextStyle="/Body/Body-16px-Medium"
+              >
+                Trusted by Thousands of Homeowners
+              </TrustedByThousandsOfHomeowners>
+              <TitleDescription
+                  nodeId="Oa4q8ObKO"
+                  width="1fr"
+                  height="fit-content"
+                  borderRadius="0px"
+                  overflow="visible"
+                  layout="stack"
+                  gap="24px"
+                  stackDirection="vertical"
+                  stackDistribution="start"
+                  stackAlignment="start"
+              >
+                <FastReliablePlumbingSolutionsYouCanTrust
+                    nodeId="H0EQBr8hB"
+                    width="1fr"
+                    height="fit-content"
+                    <!-- project text style path, always starts with / -->
+                    inlineTextStyle="/Heading/Heading 1"
+                >
+                  Fast reliable plumbing solutions you can Trust
+                </FastReliablePlumbingSolutionsYouCanTrust>
+                <PlumbingAcRepairElectricalWorkAndCompleteHomeMaintenanceByCe
+                    nodeId="XsjDwYqvX"
+                    width="1fr"
+                    height="fit-content"
+                    <!-- project text style path, always starts with / -->
+                    inlineTextStyle="/Body/Body-20px-Medium"
+                >
+                  Plumbing, AC repair, electrical work, and complete home maintenance by certified professionals.
+                </PlumbingAcRepairElectricalWorkAndCompleteHomeMaintenanceByCe>
+              </TitleDescription>
+            </Text>
+            <PrimaryButton
+                nodeId="vu2LKNt43"
+                width="fit-content"
+                height="fit-content"
+                <!-- the component id this instance uses -->
+                componentId="Y8FLRZ93g"
+                variant="MkNLMUh9v"
+                ycw27fUKm="Get Free Estimate"
+                hM59WZCdN="/contact"
+             />
+          </TitleWrapper>
+          <Cards
+              nodeId="BAmiIH6uq"
+              width="fit-content"
+              height="fit-content"
+              borderRadius="0px"
+              overflow="visible"
+              layout="stack"
+              gap="30px"
+              stackDirection="horizontal"
+              stackDistribution="start"
+              stackAlignment="center"
+          >
+            <Feature
+                nodeId="Bx7ZoeXtR"
+                width="fit-content"
+                height="fit-content"
+                <!-- the component id this instance uses -->
+                componentId="ej9HrmT7x"
+                variant="SGB0G91oP"
+                axmCaN6Sl="Certified and trained technicians"
+             />
+            <Feature
+                nodeId="GPkHCyJu2"
+                width="fit-content"
+                height="fit-content"
+                <!-- the component id this instance uses -->
+                componentId="ej9HrmT7x"
+                variant="SGB0G91oP"
+                axmCaN6Sl="Quality tools and professional"
+             />
+          </Cards>
+        </TextWrapper>
+        <Image
+            nodeId="Nnmq7j5PD"
+            position="absolute"
+            width="620px"
+            height="620px"
+            bottom="-116px"
+            left="635px"
+            <!-- background image URL, if you pass a new image url, the image will be uploaded to Framer -->
+            backgroundImage="https://framerusercontent.com/images/HyjQ7oy5eU7zePWICby3Ukt2dk.png"
+            zIndex="1"
             overflow="clip"
-        >
-        </IconWrapper>
-        <CardTitle
-            nodeId="FeatCardTitle01"
-            width="1fr"
+         />
+        <HappyCustomer
+            nodeId="amtP0SatY"
+            position="absolute"
+            width="304px"
             height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Heading/H4"
-        >
-          Lightning Fast
-        </CardTitle>
-        <CardBody
-            nodeId="FeatCardBody01"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Body/Body S"
-        >
-          Optimized for performance from the ground up. Every millisecond counts.
-        </CardBody>
-      </FeatureCard>
-      <FeatureCard
-          nodeId="FeatCard02"
-          width="1fr"
-          height="fit-content"
-          <!-- background color string or project color style path (if starts with /) -->
-          backgroundColor="/Neutral/02"
-          borderRadius="16px"
-          overflow="clip"
-          layout="stack"
-          gap="16px"
-          padding="32px 24px 32px 24px"
-          stackDirection="vertical"
-          stackDistribution="start"
-          stackAlignment="start"
-      >
-        <IconWrapper
-            nodeId="FeatIcon02"
-            width="40px"
-            height="40px"
-            borderRadius="8px"
+            right="-20px"
+            bottom="-72px"
             <!-- background color string or project color style path (if starts with /) -->
-            backgroundColor="/Accent/Green/01"
-            overflow="clip"
+            backgroundColor="/White/White"
+            borderRadius="16px"
+            zIndex="1"
+            overflow="visible"
+            layout="stack"
+            gap="10px"
+            padding="30px"
+            stackDirection="vertical"
+            stackDistribution="start"
+            stackAlignment="start"
         >
-        </IconWrapper>
-        <CardTitle
-            nodeId="FeatCardTitle02"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Heading/H4"
-        >
-          Always Reliable
-        </CardTitle>
-        <CardBody
-            nodeId="FeatCardBody02"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Body/Body S"
-        >
-          99.9% uptime guaranteed. Your users stay connected, always.
-        </CardBody>
-      </FeatureCard>
-      <FeatureCard
-          nodeId="FeatCard03"
-          width="1fr"
-          height="fit-content"
-          <!-- background color string or project color style path (if starts with /) -->
-          backgroundColor="/Neutral/02"
-          borderRadius="16px"
-          overflow="clip"
-          layout="stack"
-          gap="16px"
-          padding="32px 24px 32px 24px"
-          stackDirection="vertical"
-          stackDistribution="start"
-          stackAlignment="start"
-      >
-        <IconWrapper
-            nodeId="FeatIcon03"
-            width="40px"
-            height="40px"
-            borderRadius="8px"
-            <!-- background color string or project color style path (if starts with /) -->
-            backgroundColor="/Accent/Purple/01"
-            overflow="clip"
-        >
-        </IconWrapper>
-        <CardTitle
-            nodeId="FeatCardTitle03"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Heading/H4"
-        >
-          Deeply Secure
-        </CardTitle>
-        <CardBody
-            nodeId="FeatCardBody03"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Body/Body S"
-        >
-          Enterprise-grade encryption and access controls built in by default.
-        </CardBody>
-      </FeatureCard>
-      <FeatureCard
-          nodeId="FeatCard04"
-          width="1fr"
-          height="fit-content"
-          <!-- background color string or project color style path (if starts with /) -->
-          backgroundColor="/Neutral/02"
-          borderRadius="16px"
-          overflow="clip"
-          layout="stack"
-          gap="16px"
-          padding="32px 24px 32px 24px"
-          stackDirection="vertical"
-          stackDistribution="start"
-          stackAlignment="start"
-      >
-        <IconWrapper
-            nodeId="FeatIcon04"
-            width="40px"
-            height="40px"
-            borderRadius="8px"
-            <!-- background color string or project color style path (if starts with /) -->
-            backgroundColor="/Accent/Orange/01"
-            overflow="clip"
-        >
-        </IconWrapper>
-        <CardTitle
-            nodeId="FeatCardTitle04"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Heading/H4"
-        >
-          Simple to Scale
-        </CardTitle>
-        <CardBody
-            nodeId="FeatCardBody04"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Body/Body S"
-        >
-          Grow from 10 to 10 million users without changing your setup.
-        </CardBody>
-      </FeatureCard>
-      <FeatureCard
-          nodeId="FeatCard05"
-          width="1fr"
-          height="fit-content"
-          <!-- background color string or project color style path (if starts with /) -->
-          backgroundColor="/Neutral/02"
-          borderRadius="16px"
-          overflow="clip"
-          layout="stack"
-          gap="16px"
-          padding="32px 24px 32px 24px"
-          stackDirection="vertical"
-          stackDistribution="start"
-          stackAlignment="start"
-      >
-        <IconWrapper
-            nodeId="FeatIcon05"
-            width="40px"
-            height="40px"
-            borderRadius="8px"
-            <!-- background color string or project color style path (if starts with /) -->
-            backgroundColor="/Accent/Teal/01"
-            overflow="clip"
-        >
-        </IconWrapper>
-        <CardTitle
-            nodeId="FeatCardTitle05"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Heading/H4"
-        >
-          Smart Analytics
-        </CardTitle>
-        <CardBody
-            nodeId="FeatCardBody05"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Body/Body S"
-        >
-          Real-time dashboards and insights that help you make better decisions faster.
-        </CardBody>
-      </FeatureCard>
-      <FeatureCard
-          nodeId="FeatCard06"
-          width="1fr"
-          height="fit-content"
-          <!-- background color string or project color style path (if starts with /) -->
-          backgroundColor="/Neutral/02"
-          borderRadius="16px"
-          overflow="clip"
-          layout="stack"
-          gap="16px"
-          padding="32px 24px 32px 24px"
-          stackDirection="vertical"
-          stackDistribution="start"
-          stackAlignment="start"
-      >
-        <IconWrapper
-            nodeId="FeatIcon06"
-            width="40px"
-            height="40px"
-            borderRadius="8px"
-            <!-- background color string or project color style path (if starts with /) -->
-            backgroundColor="/Accent/Pink/01"
-            overflow="clip"
-        >
-        </IconWrapper>
-        <CardTitle
-            nodeId="FeatCardTitle06"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Heading/H4"
-        >
-          Team Collaboration
-        </CardTitle>
-        <CardBody
-            nodeId="FeatCardBody06"
-            width="1fr"
-            height="fit-content"
-            <!-- project text style path, always starts with / -->
-            inlineTextStyle="/Body/Body S"
-        >
-          Built-in roles, permissions and real-time co-editing for modern teams.
-        </CardBody>
-      </FeatureCard>
-    </FeatureGrid>
-  </FeaturesSection>
+          <TextWrapper
+              nodeId="c_aFXSsBz"
+              width="1fr"
+              height="fit-content"
+              borderRadius="0px"
+              overflow="visible"
+              layout="stack"
+              gap="40px"
+              stackDirection="vertical"
+              stackDistribution="start"
+              stackAlignment="start"
+          >
+            <HappyCustomers
+                nodeId="X0JwyJSVE"
+                width="1fr"
+                height="fit-content"
+                borderRadius="0px"
+                overflow="visible"
+                layout="stack"
+                gap="8px"
+                stackDirection="vertical"
+                stackDistribution="start"
+                stackAlignment="start"
+            >
+              <1499
+                  nodeId="How6ICX8R"
+                  width="1fr"
+                  height="fit-content"
+                  <!-- project text style path, always starts with / -->
+                  inlineTextStyle="/Heading/Heading 1 b"
+              >
+                1,499+
+              </1499>
+              <HappyCustomers
+                  nodeId="b9Rm8GQAQ"
+                  width="1fr"
+                  height="fit-content"
+                  <!-- project text style path, always starts with / -->
+                  inlineTextStyle="/Body/Body-16px-Medium"
+              >
+                Happy Customers
+              </HappyCustomers>
+            </HappyCustomers>
+            <Avatar
+                nodeId="UB97x4JNT"
+                width="fit-content"
+                height="fit-content"
+                borderRadius="0px"
+                overflow="visible"
+                layout="stack"
+                gap="12px"
+                stackDirection="horizontal"
+                stackDistribution="start"
+                stackAlignment="center"
+            >
+              <ImageWrapper
+                  nodeId="z8YasWNY5"
+                  width="fit-content"
+                  height="fit-content"
+                  borderRadius="0px"
+                  overflow="visible"
+                  layout="stack"
+                  gap="-16px"
+                  stackDirection="horizontal"
+                  stackDistribution="start"
+                  stackAlignment="center"
+              >
+                <Avatar1
+                    nodeId="qcHa457al"
+                    width="40px"
+                    height="40px"
+                    borderRadius="100%"
+                    <!-- background image URL, if you pass a new image url, the image will be uploaded to Framer -->
+                    backgroundImage="https://framerusercontent.com/images/6pGKR4B6j0cujMroezTdi9iATLs.png"
+                    borderWidth="1px"
+                    borderStyle="solid"
+                    borderColor="/White/White"
+                 />
+                <Avatar2
+                    nodeId="tgHRrV6yd"
+                    width="40px"
+                    height="40px"
+                    borderRadius="100%"
+                    <!-- background image URL, if you pass a new image url, the image will be uploaded to Framer -->
+                    backgroundImage="https://framerusercontent.com/images/zQvBUSCvXARc2gOpLM18vDLFvnQ.png"
+                    borderWidth="1px"
+                    borderStyle="solid"
+                    borderColor="/White/White"
+                 />
+                <Avatar3
+                    nodeId="D5hZBujuc"
+                    width="40px"
+                    height="40px"
+                    borderRadius="100%"
+                    <!-- background image URL, if you pass a new image url, the image will be uploaded to Framer -->
+                    backgroundImage="https://framerusercontent.com/images/HFlP9folXrxwgoUd03tkhl8hJs.png"
+                    borderWidth="1px"
+                    borderStyle="solid"
+                    borderColor="/White/White"
+                 />
+              </ImageWrapper>
+              <HouseOwner
+                  nodeId="RYpaLGqpu"
+                  width="fit-content"
+                  height="fit-content"
+                  borderRadius="0px"
+                  overflow="visible"
+                  layout="stack"
+                  stackDirection="vertical"
+                  stackDistribution="start"
+                  stackAlignment="start"
+              >
+                <HouseOwner
+                    nodeId="fNecHfECw"
+                    width="115px"
+                    height="fit-content"
+                    <!-- project text style path, always starts with / -->
+                    inlineTextStyle="/Body/Body-14px-Semibold"
+                >
+                  House Owner
+                </HouseOwner>
+              </HouseOwner>
+            </Avatar>
+          </TextWrapper>
+        </HappyCustomer>
+      </Content>
+    </Container>
+  </HeroSection>
 </Desktop>
-<!-- This is a non-primary variant. To see children inside, call getNodeXml again on this nodeId. -->
-<Tablet
-    nodeId="FeatSectTablet01"
-    position="absolute"
-    width="810px"
-    height="fit-content"
-    top="0px"
-    left="1300px"
-    <!-- background color string or project color style path (if starts with /) -->
-    backgroundColor="/Neutral/01"
-    overflow="clip"
-    layout="stack"
-    stackDirection="vertical"
-    stackDistribution="start"
-    stackAlignment="center"
- />
-<!-- This is a non-primary variant. To see children inside, call getNodeXml again on this nodeId. -->
-<Phone
-    nodeId="FeatSectPhone01"
-    position="absolute"
-    width="390px"
-    height="fit-content"
-    top="0px"
-    left="2210px"
-    <!-- background color string or project color style path (if starts with /) -->
-    backgroundColor="/Neutral/01"
-    overflow="clip"
-    layout="stack"
-    stackDirection="vertical"
-    stackDistribution="start"
-    stackAlignment="center"
- />

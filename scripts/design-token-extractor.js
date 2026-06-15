@@ -65,8 +65,7 @@ OPTIONEN:
   --help                  Diese Hilfe
 
 EXIT-CODES:
-  0 = Tokens extrahiert, Mapping erstellt
-  1 = Warnungen (einige Werte nicht auflösbar)
+  0 = Tokens extrahiert (unmapped tokens produce warnings, not errors)
   2 = Keine Eingabedatei gefunden
 `);
   if (args.help) process.exit(0);
@@ -324,4 +323,7 @@ if (args['variables-plan']) {
 }
 
 process.stderr.write(`${tokenMapping.meta.mappedCount} mapped, ${tokenMapping.meta.unmappedCount} need e-gv-* IDs\n`);
-process.exit(tokenMapping.meta.unmappedCount > 0 ? 1 : 0);
+process.exit(0);
+// NB: unmapped tokens are normal on first run — they need e-gv-* IDs
+//     assigned via batch-create-variables. The variables-plan.json
+//     includes the MCP call to do this.

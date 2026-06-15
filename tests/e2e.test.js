@@ -434,6 +434,80 @@ describe('E2E Pipeline: Framer XML → Elementor V4', () => {
     }
   });
 
+// ── S14: ENH-16 — FramerExport CLI Integration (Sprint 9) ────────────
+
+describe('S14: ENH-16 — FramerExport CLI Integration', () => {
+  test('ENH-16: FramerExport CLI directory exists with package.json', () => {
+    const exportDir = process.env.FRAMER_EXPORT_DIR || join(__dirname, '..', 'tools', 'framer-export');
+    const parentDir = resolve(__dirname, '..', '..');
+    const candidates = [
+      exportDir,
+      join(parentDir, 'FramerExport'),
+      join(__dirname, '..', 'FramerExport'),
+    ];
+    let found = null;
+    for (const dir of candidates) {
+      if (existsSync(join(dir, 'package.json'))) { found = dir; break; }
+    }
+    if (!found) {
+      console.log('[SKIP] FramerExport CLI not found. Set FRAMER_EXPORT_DIR.');
+      return;
+    }
+    const pkg = JSON.parse(readFileSync(join(found, 'package.json'), 'utf8'));
+    assert.ok(pkg.name, 'FramerExport has package name');
+    assert.ok(pkg.scripts && pkg.scripts.dev, 'Has dev script entry point');
+    assert.ok(existsSync(join(found, 'src', 'cli', 'index.ts')), 'Has src/cli/index.ts');
+    console.log('FramerExport found at: ' + found + ' v' + pkg.version);
+  });
+
+  test('ENH-16: FramerExport produces index.html with valid structure', () => {
+    const exportDir = process.env.FRAMER_EXPORT_DIR || join(__dirname, '..', 'tools', 'framer-export');
+    // Check the known export subdirectory
+    const knownExport = join(exportDir, 'framer-stupendous-football-158496', 'index.html');
+    let htmlFile = null;
+    if (existsSync(knownExport)) {
+      htmlFile = knownExport;
+    } else if (existsSync(join(exportDir, 'index.html'))) {
+      htmlFile = join(exportDir, 'index.html');
+    }
+    if (!htmlFile) {
+      console.log('[SKIP] No FramerExport output found. Run FramerExport CLI first.');
+      return;
+    }
+    const content = readFileSync(htmlFile, 'utf8');
+    assert.ok(content.includes('<!DOCTYPE html>') || content.includes('<html'),
+      'Export must contain valid HTML structure');
+    assert.ok(content.includes('</html>'), 'Export must be complete HTML');
+    const size = Buffer.byteLength(content);
+    assert.ok(size > 1000, `Export should be > 1KB, got ${size} bytes`);
+    console.log('Export HTML: ' + htmlFile + ' (' + (size / 1024).toFixed(1) + ' KB)');
+  });
+
+  test('ENH-16: extraction pipeline produces expected output files', () => {
+    const exportDir = process.env.FRAMER_EXPORT_DIR || join(__dirname, '..', 'tools', 'framer-export');
+    const tokensDir = join(exportDir, 'framer-stupendous-football-158496', 'tokens');
+    if (!existsSync(tokensDir)) {
+      console.log('[SKIP] No FramerExport tokens directory found.');
+      return;
+    }
+    const expectedFiles = [
+      'extracted-styles.json',
+      'responsive-breakpoints.json',
+      'token-mapping.json',
+      'variables-plan.json',
+      'animation-plan.json',
+      'widget-plan.json',
+    ];
+    let found = 0;
+    for (const f of expectedFiles) {
+      if (existsSync(join(tokensDir, f))) found++;
+    }
+    assert.ok(found >= 4,
+      `Expected >= 4 extraction outputs, found ${found}/6 in ${tokensDir}`);
+    console.log('Extraction outputs: ' + found + '/6 files in ' + tokensDir);
+  });
+});
+
 // ── S13: ENH-12 — E2E Framer URL Pipeline (Sprint 8) ─────────────────
 
 describe('S13: ENH-12 — E2E Framer URL Pipeline', () => {

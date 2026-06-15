@@ -189,9 +189,10 @@ export class McpBridge {
     this.verbose      = options.verbose || false;
 
     // FIX-7: Concurrency-Limit für callParallel()
-    // Default: 3. Überschreibbar via Option oder MCP_CONCURRENCY env var.
+    // Sprint 14: Default auf 5 erhöht (modern machines handle more parallel WP requests).
+    // Überschreibbar via Option, MCP_CONCURRENCY env var, oder MCP_CONCURRENCY_PROFILE.
     this.defaultConcurrency = options.concurrency
-      || parseInt(process.env.MCP_CONCURRENCY || '3', 10);
+      || McpBridge._resolveConcurrency();
 
     // Session-Management
     this._sessionId    = null;
@@ -201,6 +202,26 @@ export class McpBridge {
     // Cache für read-only Abilities
     this._cache = new Map();
     this._cacheTtl = 5 * 60 * 1000; // 5 Minuten
+  }
+
+  // ── Concurrency Resolution (Sprint 14) ─────────────────────────────────
+
+  /**
+   * Resolves the default concurrency value from environment.
+   * Priority: MCP_CONCURRENCY > MCP_CONCURRENCY_PROFILE > default (5).
+   *
+   * MCP_CONCURRENCY_PROFILE presets:
+   *   low    = 2  (shared hosting, single-core)
+   *   medium = 5  (default, VPS/local dev)
+   *   high   = 10 (dedicated server)
+   */
+  static _resolveConcurrency() {
+    const explicit = parseInt(process.env.MCP_CONCURRENCY || '', 10);
+    if (!isNaN(explicit) && explicit > 0) return explicit;
+
+    const profile = process.env.MCP_CONCURRENCY_PROFILE || 'medium';
+    const presets = { low: 2, medium: 5, high: 10 };
+    return presets[profile] || 5;
   }
 
   // ── Static Factory ───────────────────────────────────────────────────────
@@ -581,13 +602,13 @@ export class McpBridge {
    *
    * @param {Array<{ability: string, params?: object}>} calls
    * @param {object} [options]
-   * @param {number} [options.concurrency=3]  Maximale Anzahl paralleler Calls
+   * @param {number} [options.concurrency=5]  Maximale Anzahl paralleler Calls
    * @returns {Promise<Array<{status: 'fulfilled'|'rejected', value?: any, reason?: any, ability: string}>>}
    */
   async callParallel(calls, options = {}) {
     if (!Array.isArray(calls) || calls.length === 0) return [];
 
-    const concurrency = Math.max(1, options.concurrency ?? this.defaultConcurrency ?? 3);
+    const concurrency = Math.max(1, options.concurrency ?? this.defaultConcurrency ?? 5);
 
     process.stderr.write(
       `[mcp-bridge] callParallel: ${calls.length} calls gestartet (concurrency=${concurrency})\n`
