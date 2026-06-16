@@ -32,7 +32,10 @@ tools/framer-export/hero-only-v4*.json
 tools/framer-export/hero-v4-tree*.json
 tools/framer-export/hero-phase4.json
 tools/framer-export/homepage-v4-tree.json
+tools/framer-export/hero-section.xml
+tools/framer-export/homepage.xml
 tools/framer-export/framer-hilarious-workshops-284047-*/
+tools/framer-export/framer-remarkable-interface-*/
 tools/framer-export/phase4/
 
 # Umgebungsvariablen
@@ -51,6 +54,7 @@ rollback-plan.json
 .live-cache/
 .deploy-marker
 qa-report.json
+pipeline-profile.json
 
 # Pipeline-Working-Dir-Artefakte
 tmp/
