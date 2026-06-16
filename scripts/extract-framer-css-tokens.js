@@ -384,10 +384,15 @@ async function main() {
     `⚠ ${unmapped.length} unmapped tokens`,
   ].join(', ') + '\n');
 
-  process.exit(0);
+  // Let Node exit naturally — avoids Windows libuv UV_HANDLE_CLOSING race
+  // that process.exit(0) triggers when fetch() handles are still closing.
+  // Node exits with code 0 when the event loop drains, which is safe.
 }
 
 main().catch(e => {
   process.stderr.write(`FATAL: ${e.message}\n`);
-  process.exit(2);
+  // Brief delay avoids UV_HANDLE_CLOSING race on Windows — same root cause
+  // as the natural-exit approach in the success path: process.exit() while
+  // libuv is tearing down fetch handles triggers the assertion.
+  setTimeout(() => process.exit(2), 50);
 });
