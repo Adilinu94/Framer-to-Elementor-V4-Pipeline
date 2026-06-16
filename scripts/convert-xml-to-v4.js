@@ -25,7 +25,9 @@ import {
   normalizeHex, resolveCssVar, generateStyleId,
   wrapSize, wrapUnitless, wrapDimensions, wrapBorderRadius, wrapGvColor, wrapGvFont,
   wrapColor, wrapType, wrapImageSrc, isDimensionValue, wrapImage, wrapHtmlContent,
+  wrapClasses,
 } from './lib/framer-utils.js';
+import { buildStyleClass } from './lib/v4-tree-builder.js';
 
 // ─────────────────────────────────────────────
 // CLI
@@ -490,6 +492,15 @@ function detectGridLayout(xmlNode, attrs) {
 /**
  * Baut das V4-Style-Props-Objekt aus Framer-Attributen.
  *
+ * Dies ist die RICH-Version des Mappings. Die Library v4-tree-builder.js
+ * enthält mit mapFramerStyleToV4Props() eine vereinfachte Referenz-Implementierung.
+ * buildStyleProps() erweitert diese um:
+ *   - Bug 3: background.color-Warnings (GC-only)
+ *   - RC-08: position:absolute-Heuristik
+ *   - RC-11: Sane Text-Fallbacks (Inter, 32px, etc.)
+ *   - RC-09/C2: Grid-Detection mit grid-template-columns
+ *   - RC-02: flex-direction ohne $$type-Wrapper
+ *
  * Mapt CSS-Properties aus Framer-Attributen (stackDirection, backgroundColor,
  * fontFamily, etc.) in V4 Style-Props mit korrekten $$type-Wrappern.
  *
@@ -797,13 +808,14 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
   log(`[${'  '.repeat(depth)}] ${name} → ${widgetType} (${styleId})`);
 
   // Build base props (pass xmlNode for grid detection in RC-09)
+  // NOTE: buildStyleProps() is the richer version of v4-tree-builder's
+  // mapFramerStyleToV4Props() — it adds Bug 3 (GC warnings), RC-08 (position),
+  // RC-11 (text fallbacks), RC-09 (grid detection), and C2 grid support.
   const props = buildStyleProps(enrichedAttrs, widgetType, tokenMapping, fontResolution, imageMap, xmlNode);
-
-
 
   // ── Settings ──
   const settings = {
-    classes: { '$$type': 'classes', value: [styleId] },
+    classes: wrapClasses([styleId]),
   };
 
   if (widgetType === 'e-flexbox') {
@@ -861,19 +873,18 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
   }
 
   // ── Style variants (VERBOSE format: id/type/label required by elementor-set-content) ──
+  // Uses shared buildStyleClass() from v4-tree-builder.js (UMBAUPLAN v2.0 Phase 1.4).
+  // Phase 1 Bug Fix: base variant uses breakpoint:null per Elementor V4 convention.
+  // The Elementor server treats null as the default/desktop base and expects named
+  // breakpoints (tablet, mobile) only on override variants.
   const baseVariant = {
-    meta:  { breakpoint: 'desktop', state: null },
+    meta:  { breakpoint: null, state: null },
     props: Object.keys(props).length > 0 ? props : {},
     custom_css: null,
   };
 
   const styles = {
-    [styleId]: {
-      id: styleId,
-      type: 'class',
-      label: 'local',
-      variants: [baseVariant],
-    },
+    [styleId]: buildStyleClass({ id: styleId, label: 'local', variants: [baseVariant] }),
   };
 
   // ── Recurse into children ──

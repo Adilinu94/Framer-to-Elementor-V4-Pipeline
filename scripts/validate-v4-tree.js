@@ -353,9 +353,9 @@ function checkResponsiveCoverage(el, path, warnings) {
     if (!styleDef || !Array.isArray(styleDef.variants)) continue;
 
     const desktopVariant = styleDef.variants.find(v => {
-      const bp = (v.meta && v.meta.breakpoint) || '';
+      const bp = (v.meta && v.meta.breakpoint);
       const st = (v.meta && v.meta.state) || null;
-      return (bp === 'desktop' || bp === '') && (!st || st === null);
+      return (bp == null || bp === 'desktop' || bp === '') && (!st || st === null);
     });
 
     const hasMobile = styleDef.variants.some(v => {
@@ -523,16 +523,19 @@ function checkVerboseStyleFormat(el, path, errors) {
     if (!Array.isArray(variants)) {
       missing.push('variants is not an array');
     } else {
+      // Check if at least one variant has a named breakpoint
+      if (variants.length > 0) {
+        const hasNamedBreakpoint = variants.some(v =>
+          v?.meta?.breakpoint != null && v.meta.breakpoint !== undefined
+        );
+        if (!hasNamedBreakpoint) {
+          missing.push('no variant has a named breakpoint — at least one must be "desktop", "tablet", or "mobile"');
+        }
+      }
       for (let vi = 0; vi < variants.length; vi++) {
         const v = variants[vi];
         if (!v || typeof v !== 'object') continue;
         const vpath = `variants[${vi}]`;
-
-        // meta.breakpoint: null = base variant (desktop), per V4 spec. Named breakpoints = "tablet"/"mobile".
-        // All three values (null, "desktop", "tablet", "mobile") are valid.
-        if (!v.meta || v.meta.breakpoint === undefined) {
-          missing.push(`${vpath}.meta.breakpoint is undefined — must be null (base) or a named breakpoint`);
-        }
 
         // meta.state must be present (PHP auto-fills, but missing it is a format gap)
         if (v.meta && !('state' in v.meta)) {
@@ -558,7 +561,7 @@ function checkVerboseStyleFormat(el, path, errors) {
         styleId,
         message: `Style "${styleId}" has ${missing.length} format issue(s): ${missing.join('; ')}`,
         issues: missing,
-        fix: 'Use VERBOSE format: {id: "<styleId>", type: "class", label: "local", variants: [{meta: {breakpoint: "desktop", state: null}, props: {...}, custom_css: null}]}'
+        fix: 'Use VERBOSE format: {id: "<styleId>", type: "class", label: "local", variants: [{meta: {breakpoint: null, state: null}, props: {...}, custom_css: null}]}'
       });
     }
   }
@@ -726,13 +729,13 @@ function checkDomDepth(tree, errors, warnings) {
     walk(root, 0, id);
   });
 
-  if (maxDepth >= 10) {
+  if (maxDepth >= 6) {
     errors.push({
       check: 7, rule: 'DOM-DEPTH', elementId: deepestPath,
       path: deepestPath,
-      message: `DOM depth ${maxDepth} ≥ 10 — server timeout risk in elementor-set-content. Flatten the tree.`,
+      message: `DOM depth ${maxDepth} ≥ 6 — server timeout risk in elementor-set-content. Flatten the tree.`,
     });
-  } else if (maxDepth >= 6) {
+  } else if (maxDepth >= 4) {
     warnings.push({
       check: 'C7', rule: 'DOM-DEPTH', elementId: deepestPath,
       path: deepestPath,

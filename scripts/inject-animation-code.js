@@ -3,9 +3,8 @@
  * scripts/inject-animation-code.js
  *
  * Liest eine Animation-Plan-Datei (animation-plan.json) oder einzelne CLI-Argumente
- * und gibt einen MCP-Plan aus, den der Claude-Agent als
- * novamira/adrians-batch-inject-snippets Batch-Call ausführt (Standard).
- * Debug-Modus: --single-mode für N Einzelcalls via adrians-code-injector.
+ * und gibt einen MCP-Plan aus, den der Claude-Agent als novamira/adrians-code-injector
+ * Calls ausführt.
  *
  * Anwendungsfälle:
  *   1. Framer GSAP-Animationen nachbauen (aus framer-export analysiert)
