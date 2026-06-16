@@ -523,13 +523,16 @@ function checkVerboseStyleFormat(el, path, errors) {
     if (!Array.isArray(variants)) {
       missing.push('variants is not an array');
     } else {
-      // Check if at least one variant has a named breakpoint
+      // Check if at least one variant has a breakpoint defined.
+      // null = Elementor V4 default/desktop base variant (V4 convention),
+      // non-null string = named breakpoint ('desktop', 'tablet', 'mobile').
+      // undefined = missing field (error).
       if (variants.length > 0) {
         const hasNamedBreakpoint = variants.some(v =>
-          v?.meta?.breakpoint != null && v.meta.breakpoint !== undefined
+          v?.meta?.breakpoint !== undefined
         );
         if (!hasNamedBreakpoint) {
-          missing.push('no variant has a named breakpoint — at least one must be "desktop", "tablet", or "mobile"');
+          missing.push('no variant has a breakpoint defined — at least one must have breakpoint: null (desktop base) or a named breakpoint ("desktop", "tablet", "mobile")');
         }
       }
       for (let vi = 0; vi < variants.length; vi++) {
