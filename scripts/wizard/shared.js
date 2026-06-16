@@ -90,6 +90,7 @@ export function findWorkspaceRoot() {
 
 /**
  * Findet das FramerExport-Verzeichnis.
+ * Bevorzugt Verzeichnisse mit package.json (CLI-fähig).
  *
  * @param {string} rootDir - Workspace-Root
  * @returns {string|null} Pfad zum FramerExport-Verzeichnis oder null
@@ -97,10 +98,18 @@ export function findWorkspaceRoot() {
 export function findFramerExportDir(rootDir) {
   const candidates = [
     process.env.FRAMER_EXPORT_DIR,
-    path.join(rootDir, 'tools', 'framer-export'),
     path.join(rootDir, 'FramerExport'),
+    path.join(rootDir, 'tools', 'framer-export'),
     path.resolve(rootDir, '..', 'FramerExport'),
   ].filter(Boolean).map(p => path.resolve(p));
+
+  // Prefer directories with package.json (CLI-capable)
+  const cliDir = candidates.find(dir =>
+    existsSync(dir) && existsSync(path.join(dir, 'package.json'))
+  );
+  if (cliDir) return cliDir;
+
+  // Fallback: any existing directory (data-only, no CLI)
   return candidates.find(dir => existsSync(dir)) || null;
 }
 
@@ -108,14 +117,21 @@ export function findFramerExportDir(rootDir) {
  * Führt einen Shell-Befehl aus und loggt den Fortschritt.
  * ENH-16: Uses spawnWithRetry for cross-platform binary resolution.
  *
+ * Output-Rescue (ENH-17): Wenn `outputFile` angegeben ist und der Prozess
+ * mit einem non-zero Exit-Code crasht (z.B. Windows libuv teardown race),
+ * prüft runFile ob die Output-Datei trotzdem geschrieben wurde. Falls ja,
+ * wird der Datei-Inhalt als stdout zurückgegeben — der Crash wird transparent
+ * behandelt. Dies schützt ALLE Pipeline-Steps vor UV_HANDLE_CLOSING & co.
+ *
  * @param {string} command - Auszuführender Befehl
  * @param {Array<string>} args - Befehlsargumente
  * @param {string} description - Beschreibung für Logging
  * @param {string} [cwd] - Working directory
- * @returns {Promise<string>} stdout
- * @throws {Error} Bei fehlgeschlagenem Befehl
+ * @param {string} [outputFile] - Erwarteter Output-Pfad für Crash-Rescue
+ * @returns {Promise<string>} stdout (oder geretteter Datei-Inhalt)
+ * @throws {Error} Bei fehlgeschlagenem Befehl (ohne rescue)
  */
-export async function runFile(command, args, description, cwd = null) {
+export async function runFile(command, args, description, cwd = null, outputFile = null) {
   const workDir = cwd || findWorkspaceRoot();
   log.step(description);
   try {
@@ -127,10 +143,53 @@ export async function runFile(command, args, description, cwd = null) {
     log.success(`${description} abgeschlossen.`);
     return stdout;
   } catch (error) {
+    // ── Output-Rescue: check if output file was written despite process crash ──
+    // On Windows, Node.js can crash during teardown (libuv UV_HANDLE_CLOSING
+    // assertion, exit code 127) AFTER the script has already completed its work.
+    if (outputFile) {
+      try {
+        if (existsSync(outputFile)) {
+          const rescued = await fs.readFile(outputFile, 'utf8');
+          if (rescued && rescued.trim().length > 0) {
+            log.warn(`${description}: Output aus gecrashtem Prozess gerettet (libuv teardown race)`);
+            log.success(`${description} abgeschlossen (Output gerettet).`);
+            return rescued;
+          }
+        }
+      } catch { /* rescue failed — genuine failure, fall through to throw */ }
+    }
+
     log.error(`${description} fehlgeschlagen.`);
     console.error(error.message);
     throw error;
   }
+}
+
+/**
+ * Führt mehrere Shell-Befehle parallel aus (Promise.all).
+ * Bei optional:true wird ein Fehler nicht geworfen, sondern als Warning geloggt.
+ *
+ * @param {Array<{command: string, args: Array<string>, description: string, cwd?: string, optional?: boolean, outputFile?: string}>} tasks
+ * @returns {Promise<Array<{description: string, ok: boolean, error?: string}>>}
+ */
+export async function runParallel(tasks) {
+  const results = await Promise.allSettled(
+    tasks.map(async (task) => {
+      try {
+        await runFile(task.command, task.args, task.description, task.cwd || null, task.outputFile || null);
+        return { description: task.description, ok: true };
+      } catch (err) {
+        if (task.optional) {
+          log.warn(`${task.description} (optional) fehlgeschlagen: ${err.message}`);
+        } else {
+          log.error(`${task.description} fehlgeschlagen: ${err.message}`);
+        }
+        return { description: task.description, ok: false, error: err.message };
+      }
+    })
+  );
+  // allSettled fallback: only reached for catastrophic errors (e.g. syntax bugs)
+  return results.map(r => r.status === 'fulfilled' ? r.value : { description: 'unknown', ok: false, error: r.reason?.message });
 }
 
 /**
@@ -292,52 +351,4 @@ export async function runWithRecovery(stepName, fn, rl) {
       if (action === 'skip') return;
     }
   }
-}
-
-/**
- * Runs multiple commands in parallel.
- * Uses Promise.allSettled to continue even if some fail.
- *
- * @param {Array<{command: string, args: string[], description: string, cwd?: string, optional?: boolean}>} tasks
- * @returns {Promise<Array<{description: string, ok: boolean, stdout: string, error?: string}>>}
- */
-export async function runParallel(tasks) {
-  log.info(`Starting ${tasks.length} parallel task(s)...`);
-
-  // Use a quiet variant of runFile that doesn't double-log errors
-  async function runFileQuiet(command, args, description, cwd) {
-    const workDir = cwd || findWorkspaceRoot();
-    try {
-      const { stdout, stderr } = await spawnWithRetry(command, args, {
-        cwd: workDir,
-        maxBuffer: 1024 * 1024 * 20,
-      });
-      if (stderr) log.warn(`[${description}] ${stderr.slice(0, 200)}`);
-      return stdout;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  const results = await Promise.allSettled(
-    tasks.map(t => runFileQuiet(t.command, t.args, t.description, t.cwd || null))
-  );
-
-  const outcomes = [];
-  for (let i = 0; i < tasks.length; i++) {
-    const r = results[i];
-    if (r.status === 'fulfilled') {
-      log.success(`${tasks[i].description} abgeschlossen.`);
-      outcomes.push({ description: tasks[i].description, ok: true, stdout: r.value });
-    } else {
-      const err = r.reason?.message || String(r.reason);
-      if (tasks[i].optional) {
-        log.warn(`${tasks[i].description} fehlgeschlagen (optional): ${err}`);
-      } else {
-        log.error(`${tasks[i].description} fehlgeschlagen: ${err}`);
-      }
-      outcomes.push({ description: tasks[i].description, ok: false, stdout: '', error: err });
-    }
-  }
-  return outcomes;
 }
