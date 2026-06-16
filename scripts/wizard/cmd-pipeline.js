@@ -425,9 +425,61 @@ export async function runPipeline({
   // STEPS 4-5: Unframer MCP (delegated)
   // ════════════════════════════════════════════
 
-  log.info('Steps 4-5/14: Unframer MCP — an Agent delegiert');
-  steps.push({ step: 4, name: 'Unframer getProjectXml', status: 'delegated' });
-  steps.push({ step: 5, name: 'Unframer getNodeXml', status: 'delegated' });
+  // STEPS 4-5: Unframer MCP (live via unframer-bridge wenn konfiguriert,
+  // sonst wie bisher an Agent delegiert)
+  // Feature-Flag: nur aktiv wenn UNFRAMER_MCP_URL/ID/SECRET gesetzt sind
+  // (gelesen aus .env.local oder process.env).
+  // Siehe: docs/FRAMER-AGENT-SOURCE.md
+  let unframerBridge = null;
+  try {
+    const { UnframerBridge } = await import('../lib/unframer-bridge.js');
+    if (UnframerBridge.isConfigured()) {
+      unframerBridge = UnframerBridge.fromEnv();
+      unframerBridge.logConfigSummary();
+    }
+  } catch (bridgeErr) {
+    log.warn(`Unframer-Bridge nicht verfuegbar: ${bridgeErr.message} — Steps 4-5 werden delegiert`);
+  }
+
+  if (unframerBridge) {
+    log.step('Steps 4-5/14: Unframer MCP (live via unframer-bridge)...');
+
+    // Step 4: getProjectXml
+    const projectXmlDir = path.join(exportDir, 'unframer');
+    await fs.mkdir(projectXmlDir, { recursive: true });
+
+    let step4Status = 'ok', step4Error = null;
+    const projectXmlPath = path.join(projectXmlDir, 'project.xml');
+    try {
+      const start = Date.now();
+      const projectXml = await unframerBridge.callTool('getProjectXml', {});
+      // projectXml ist ein langer String (XML-Dump) — direkt speichern
+      const xmlString = typeof projectXml === 'string' ? projectXml : JSON.stringify(projectXml, null, 2);
+      await fs.writeFile(projectXmlPath, xmlString, 'utf8');
+      const elapsed = Date.now() - start;
+      log.success(`getProjectXml: ${xmlString.length} bytes (${elapsed}ms) → ${path.relative(rootDir, projectXmlPath)}`);
+      steps.push({ step: 4, name: 'Unframer getProjectXml', status: 'ok', detail: `${xmlString.length} bytes, ${elapsed}ms` });
+    } catch (err) {
+      step4Status = 'warning';
+      step4Error = err.message;
+      log.warn(`getProjectXml fehlgeschlagen: ${err.message} — Fallback: Agent-delegiert`);
+      steps.push({ step: 4, name: 'Unframer getProjectXml', status: 'warning', error: err.message });
+    }
+
+    // Step 5: getNodeXml pro Section (optional — koennte auch in Step 11 verwendet werden)
+    // Hier nur Platzhalter: Wenn project.xml Sections enthaelt, koennen sie in Step 11
+    // via convert-xml-to-v4 verarbeitet werden. Die tatsaechliche getNodeXml-Logik
+    // bleibt beim Agent (out-of-band) — der Bridge-Call waere redundant.
+    if (step4Status === 'ok') {
+      steps.push({ step: 5, name: 'Unframer getNodeXml (sections)', status: 'skipped', detail: 'XML in Step 4 enthaelt alle Sections' });
+    } else {
+      steps.push({ step: 5, name: 'Unframer getNodeXml (sections)', status: 'delegated' });
+    }
+  } else {
+    log.info('Steps 4-5/14: Unframer MCP — an Agent delegiert (kein UNFRAMER_MCP_* konfiguriert)');
+    steps.push({ step: 4, name: 'Unframer getProjectXml', status: 'delegated' });
+    steps.push({ step: 5, name: 'Unframer getNodeXml', status: 'delegated' });
+  }
 
   // ════════════════════════════════════════════
   // STEP 6: Style-Referenzen sammeln
