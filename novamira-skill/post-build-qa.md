@@ -41,6 +41,47 @@ Build fertig
 
 ---
 
+## Schritt 0 — Rendering-Sanity-Check (NEU — P1-D / vor allem anderen)
+
+**Hintergrund:** Nach `elementor-set-content` oder `batch-build-page` kann die
+Seite **leer** erscheinen trotz `success: true`. Mögliche Ursachen:
+1. **e_atomic_elements deaktiviert** (separat von `runtime_available`) — siehe
+   Session-Start Schritt 2c / `ensure-elementor-experiments.js`
+2. **CSS-Cache nicht neu gebaut** — insbesondere nach `set-content`. Siehe
+   `framer-v4-pipeline.md` Schritt 11.
+3. Empty Build (Element ohne Children aber mit `variants:[]`).
+
+Dieser Step fängt alle 3 früh ab:
+
+```bash
+Tool: novamira/execute-php
+code: |
+  $content = \Elementor\Plugin::$instance->frontend->get_builder_content(<POST_ID>, true);
+  return [
+    'renders'      => strlen($content) > 500,
+    'length'       => strlen($content),
+    'has_atomic'   => str_contains($content, 'e-') || str_contains($content, 'elementor-widget'),
+    'has_classes'  => str_contains($content, 'class="'),
+    'http_status'  => wp_remote_get(get_permalink(<POST_ID>))['response']['code'] ?? 0,
+    'experiment_check' => \Elementor\Plugin::$instance->experiments->is_feature_active('e_atomic_elements'),
+  ];
+```
+
+**Interpretation:**
+
+| Rückgabe                 | Bedeutung                              | Aktion |
+|--------------------------|---------------------------------------|--------|
+| `renders: false`         | Experiment inaktiv ODER Cache leer    | Schritt 2c (`ensure-elementor-experiments`) + Schritt 11 (CSS-Rebuild) |
+| `length < 500`           | Empty Build / kein V4-Output          | `elementor-get-content` → Tree prüfen |
+| `http_status != 200`     | 500/404 oder Permalink falsch         | Browser manuell prüfen |
+| `experiment_check: false`| Atomic Experiment inaktiv             | Schritt 2c sofort ausführen |
+
+Wenn dieser Check PASST → weiter mit Schritt 1 (Layout-Audit).
+
+⚠️ **NICHT überspringen:** Die häufigste Ursache für "war sieht die Seite
+aus wie vorher / build hat nichts gemacht" ist genau dieser Check, der nie
+ausgeführt wurde.
+
 ## Schritt 1 — Layout-Audit (Server-seitig, PFLICHT)
 
 ```
@@ -106,6 +147,25 @@ Parameters:
   "total_issues": 0
 }
 ```
+
+⚠️ **Bekannter Bug: variable-audit False Positives**
+
+`novamira-adrianv2/variable-audit` meldet `defined_count: 0` obwohl die
+Variablen existieren. Drift-Warnungen für `e-gv-XXXXX` können False
+Positives sein.
+
+**Verifikation wenn Drift gemeldet:**
+```bash
+# Cross-Check mit elementor-list-variables
+novamira/elementor-list-variables → listet ALLE existierenden e-gv-* IDs
+```
+
+**Echter Drift:** Variable weder in `elementor-list-variables` noch im
+Design-System sichtbar.
+
+**False Positive Pattern:** `audit` meldet `defined: 0` aber `list-variables`
+zeigt alle IDs korrekt → audit intern Cache/State-Problem; ggf. Plugin neu
+laden oder audit später erneut ausführen (nicht Build-blockierend).
 
 ---
 

@@ -5,6 +5,89 @@ description: See SKILL.md content.
 ---
 # Framer Dual-Source to V4 Converter
 
+## Fallback wenn Unframer MCP nicht erreichbar (NEU — SCHWÄCHE 7 / P3-C)
+
+**Symptom:** `scripts/preflight/check-unframer-connectivity.js` return `ok: false`
+(Timeout oder `Host not in allowlist: mcp.unframer.co`).
+
+**Reihenfolge der Fallback-Strategien:**
+
+### Option A — Framer-Seite manuell via `web_fetch` (EMPFOHLEN wenn erreichbar)
+
+```bash
+# 1. Framer-Seite als HTML laden (in Claude-Sandbox)
+web_fetch("https://<framer-site>.framer.app/") → HTML-String
+
+# 2. CSS-Links aus HTML extrahieren
+grep -oP 'href="[^"]*\.css[^"]*"' | sed 's/href="//; s/"//'
+
+# 3. Jeden CSS-Link fetchen (Framer splittet CSS oft in mehrere Dateien)
+for href in <css_links>:
+  web_fetch(href) → CSS-Text
+
+# 4. Design-Tokens manuell mappen
+#    --token-very-dark-green → #061D13 (aus RGB(6,29,19))
+# 5. In token-mapping.json eintragen als "source": "web-fetch-fallback"
+
+# 6. CSS-Datei lokal in extract-framer-css-tokens.js nutzen
+node scripts/extract-framer-css-tokens.js --html <(echo "FAKE_HTML_MIT_INLINE_CSS") --output token-mapping.json
+```
+
+Wichtige Heuristiken beim manuellen Mapping:
+- **Var-Fallback nutzen:** Framer-XML enthält `backgroundColor="/Theme Color/Very Dark Green"`
+  → der eigentliche Wert steht in CSS als `var(--token-XXX, rgb(6,29,19))`. Den Fallback
+  extrahieren.
+- **Erste Hauptseite zuerst:** Falls Subpages andere Farben haben, je nach Variant frisch mappen.
+- **Cross-Validate mit Screenshot:** Nimm einen Screenshot der Framer-Seite, vergleiche Hex-Töne.
+
+### Option B — Gecachte `homepage.xml` (NUR mit Projekt-Match-Check!)
+
+```bash
+# Pflicht: Erst verify-xml-project-match.js — sonst MIX-UP mit fremden Projekten!
+node scripts/preflight/verify-xml-project-match.js \
+  --xml tools/framer-export/homepage.xml \
+  --target-url https://<framer-site>.framer.app/
+# Exit 0 = passt, weiter mit convert-xml-to-v4.js
+# Exit 1 = MISMATCH → andere homepage.xml suchen oder Option A/C
+```
+
+**Wenn XML existiert aber kein `framer-project-id` Kommentar hat:**
+Kommentar selbst hinzufügen (vor `<?xml ...?>` oder als erste Zeile):
+
+```xml
+<!-- framer-project-id="<id>" framer-url="<full-url>" exported-at="<iso>" -->
+```
+
+Dann `verify-xml-project-match.js` erneut ausführen.
+
+### Option C — Build auf Basis von Screenshot + Design-Analyse (letzter Ausweg)
+
+Wenn weder Unframer MCP noch eine korrekte homepage.xml verfügbar sind:
+1. **Screenshot** der Framer-Seite (`agent-browser screenshot`)
+2. **Manuelle Design-Analyse:** Welche Sections sind vorhanden? Welche
+   Farben dominieren? Welche Fonts? Welches Layout-Pattern?
+3. **Manuell** einen minimalen V4-Tree in `v4-tree.json` schreiben
+   (Hero + 1-2 nachgelagerte Sections reichen für ein MVP).
+
+### In allen drei Fällen: WARNUNG in SESSION-STATE.md
+
+```markdown
+## ⚠️ Unframer MCP war nicht erreichbar — Fallback-Pfad aktiviert
+
+- Strategie: [Option A / B / C]
+- Aktiviert am: 2026-06-17
+- Daten-Source: [Framer-URL / XML-Pfad / Screenshot-Pfad]
+- Post-Build-QA verschärft: ✅ (Pixel-Diff Pflicht: `npm run section-compare -- --dry-run` als Minimum)
+```
+
+→ **Post-Build-QA verschärfen** in allen Fällen:
+- **Pflicht:** `section-compare.js` mit Cross-Check nach Framer-Original
+- **Pflicht:** `adrians-layout-audit` UND `adrians-visual-qa`
+- **Pixel-Diff:** `visual-qa.js --skip-a11y` für schnellen Render-Check
+
+## Original Skill-Content (v1.1.0)
+
+
 Converts Framer designs into Elementor V4 Atomic Widget pages using TWO independent sources:
 1. **Unframer MCP** — structural XML (component tree, props, color/text styles)
 2. **Local Framer Export** — assets (images, fonts) and CSS token reference

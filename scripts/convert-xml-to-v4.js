@@ -22,7 +22,7 @@ import { spawnSync } from 'node:child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 import {
-  normalizeHex, resolveCssVar, generateStyleId,
+  normalizeHex, resolveCssVar, generateStyleId, sanitizeStyleId, isValidStyleId,
   wrapSize, wrapUnitless, wrapDimensions, wrapBorderRadius, wrapGvColor, wrapGvFont,
   wrapColor, wrapType, wrapImageSrc, isDimensionValue, wrapImage, wrapHtmlContent,
   wrapClasses,
@@ -340,6 +340,69 @@ function determineHtmlTag(attrs) {
   if (/\bh6\b|heading.?6/.test(name))          return 'h6';
   if (/paragraph|body|text/.test(name))         return 'p';
   return 'h2'; // default heading
+}
+
+// ─────────────────────────────────────────────
+// CONTAINER-TAG REMAPPER  (BLOCKADE 6 / P2-A)
+// ─────────────────────────────────────────────
+//
+// Hintergrund (E2E-Verbesserungsbericht Blockade 6):
+//   nav und main sind NICHT in der e-flexbox Tag-Enum und fuehren zu
+//   elementor-set-content Error:
+//     "invalid_values": [{ "key":"tag","value":"nav","opts":["div","header",...] }]
+//
+// Strategie:
+//   - Definiertes Mapping: nav→header, main→section, span→div (fuer Block-Container)
+//   - Fallback auf 'div' wenn Tag auch nach Remap nicht erlaubt ist
+//
+// Elementor V4 Tag-Enums (siehe auch style-props-quickref.md):
+//   e-flexbox   : div, header, section, article, aside, footer, a, button
+//   e-div-block : div, header, section, article, aside, footer, span噂oldString>
+
+
+// BLOCKADE 6 / P2-A: Tag-Remapper (nav→header etc.)
+// Elementor V4 akzeptiert diese Tags NICHT in e-flexbox enum: nav, main
+// Siehe style-props-quickref.md für vollstaendige Enum-Referenz.
+const CONTAINER_TAG_REMAPPINGS = {
+  'nav':     'header',  // nav-Semantik am naehesten an header (Barrierefreiheit-Hinweis)
+  'main':    'section', // main nicht erlaubt → section als Container
+  'span':    'div',     // fuer Block-Container; span nur in e-div-block erlaubt
+};
+
+const CONTAINER_TAG_ENUMS = {
+  'e-flexbox':   ['div','header','section','article','aside','footer','a','button'],
+  'e-div-block': ['div','header','section','article','aside','footer','span'],
+};
+
+/**
+ * Sanitiert einen Framer-Tag-String in einen gueltigen Elementor V4 Container-Tag.
+ * Wird von e-flexbox und e-div-block verwendet BEVOR der Tag in settings.tag landet.
+ *
+ * Mapping-Reihenfolge:
+ *   1. CONTAINER_TAG_REMAPPINGS (semantische Alternativen)
+ *   2. Fallback auf 'div' wenn weder Original-Tag noch Mapping in Enum ist
+ *
+ * @param {string} framerTag - Original-Tag aus Framer XML
+ * @param {string} widgetType - V4-Widget-Typ ('e-flexbox' | 'e-div-block')
+ * @returns {string} Sanitisierter Tag
+ */
+function sanitizeContainerTag(framerTag, widgetType) {
+  const raw = String(framerTag || '').toLowerCase().trim();
+  if (!raw) return widgetType === 'e-div-block' ? 'div' : 'section';
+
+  const allowed = CONTAINER_TAG_ENUMS[widgetType]
+    ?? (widgetType === 'e-div-block' ? CONTAINER_TAG_ENUMS['e-div-block'] : CONTAINER_TAG_ENUMS['e-flexbox']);
+
+  // 1. Direkt erlaubt? → durchlassen
+  if (allowed.includes(raw)) return raw;
+
+  // 2. Bekanntes Remap-Mapping anwenden
+  const remapped = CONTAINER_TAG_REMAPPINGS[raw];
+  if (remapped && allowed.includes(remapped)) return remapped;
+
+  // 3. Fallback: 'div' wenn erlaubt, sonst erstes Element der Enum
+  if (allowed.includes('div')) return 'div';
+  return allowed[0];
 }
 
 function wrapLink(href, targetBlank = false) {
@@ -663,7 +726,11 @@ const usedStyleIds  = new Map(); // base-id → count
 const usedWidgetIds = new Map(); // base-id → count  (Bug 5 Fix)
 
 function uniqueStyleId(name) {
-  const base = generateStyleId(name);
+  // SCHWAECHE 2 / P2-C: sanitizeStyleId als zusaetzlicher Guard gegen
+  // Framer-Inputs die bereits mit hyphen/uppercase ankommen. generateStyleId
+  // strippt Sonderzeichen, aber sanitizeStyleId normalisiert auch auf
+  // [a-z][a-z0-9_]* — genau das Format das Elementor V4 verlangt (Invariant III).
+  const base = sanitizeStyleId(name) || generateStyleId(name);
   const n    = (usedStyleIds.get(base) || 0) + 1;
   usedStyleIds.set(base, n);
   return n === 1 ? base : `${base}${n}`;
@@ -819,11 +886,13 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0)
   };
 
   if (widgetType === 'e-flexbox') {
-    settings.tag = attrs.tag || (depth === 0 ? 'section' : 'div');
+    // BLOCKADE 6 / P2-A: nav/main auf erlaubte Tags remappen
+    settings.tag = sanitizeContainerTag(attrs.tag || (depth === 0 ? 'section' : 'div'), 'e-flexbox');
   }
 
   if (widgetType === 'e-div-block') {
-    settings.tag = attrs.tag || 'div';
+    // BLOCKADE 6 / P2-A: nav/main auf erlaubte Tags remappen, span bleibt erlaubt hier
+    settings.tag = sanitizeContainerTag(attrs.tag || 'div', 'e-div-block');
   }
 
   if (widgetType === 'e-button') {

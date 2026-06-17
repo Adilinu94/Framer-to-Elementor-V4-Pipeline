@@ -12,6 +12,88 @@ description: >
 
 Direkter Spickzettel — kein get-style-schema-Lookup nötig für diese 30 Properties.
 
+> **⛔ AUTO-WRAP FALLE — line-height** (NEU — SCHWÄCHE 1 / P2-B)
+>
+> ```
+> ❌ FALSCH:  "line-height": 1.5    → wird zu {"size":1.5,"unit":"px"} → CSS: line-height: 1.5px (KAPUTT!)
+> ✅ RICHTIG: "line-height": {"$$type":"size","value":{"size":1.5,"unit":"em"}}
+> ✅ RICHTIG: "line-height": "1.5"  → bleibt "1.5" → CSS: line-height: 1.5 (OK)
+> ```
+>
+> Skalare Floats ohne `$$type`-Wrapper werden IMMER in px gewrappt. Das
+> ergibt `line-height: 1.5px` — faktisch kein Zeilenabstand.
+>
+> Der Validator `framer-pre-build-validate.js` hat Guard G13, der das
+> blockiert (line-height als number oder px mit size<5).
+
+> **📷 EXAKTES e-image Format** (NEU — SCHWÄCHE 5 / P2-D)
+>
+> ```json
+> // Externe URL (Framer CDN, eigener CDN):
+> "image": {
+>   "$$type": "image",
+>   "value": {
+>     "src": {
+>       "$$type": "image-src",
+>       "value": {
+>         "url": { "$$type": "url", "value": "https://example.com/img.webp" }
+>       }
+>     }
+>   }
+> }
+>
+> // WordPress Media Library (attachment-id):
+> "image": {
+>   "$$type": "image",
+>   "value": {
+>     "src": {
+>       "$$type": "image-src",
+>       "value": {
+>         "id": { "$$type": "image-attachment-id", "value": 42 }
+>       }
+>     }
+>   }
+> }
+> ```
+>
+> ⚠️ **Invariant IV:** Wenn `id` gesetzt ist, `url`-Key **KOMPLETT weglassen** (nie `url: null`).
+>   PHP's `array_filter()` strippt `null`-Werte → Elementor Server sieht das als
+>   "beide gesetzt = Fehler".
+>
+> Die 3-fach-verschachtelte `$$type`-Chain (`image` → `image-src` → `url`/`image-attachment-id`)
+> ist **nirgendwo** in Elementor dokumentiert, aber aus `tools/framer-export/phase7/hero-section.json`
+> reverse-engineered. Bleibt stabil ab Elementor 4.0.
+
+> **🏷️ Container-Tag Enums** (NEU — BLOCKADE 6 / P2-A)
+>
+> | Widget          | Erlaubte Tags                                              | NICHT erlaubt |
+> |-----------------|-----------------------------------------------------------|----------------|
+> | `e-flexbox`     | `div, header, section, article, aside, footer, a, button` | **`nav`, `main`, `span`** |
+> | `e-div-block`   | `div, header, section, article, aside, footer, span`      | **`nav`, `main`, `a`** |
+>
+> **Remap-Logik in `convert-xml-to-v4.js` (`sanitizeContainerTag()`):**
+> - `nav`  → `header`  (nächste semantische Alternative für Navbars)
+> - `main` → `section`
+> - `span` → `div` (Block-Variante in e-flexbox)
+>
+> Für `<nav>`-Semantik: `header` verwenden + aria-label="Navigation"-Attribut setzen.
+
+> **📏 Breakpoint-Meta Format** (NEU — SCHWÄCHE 9 / P3-F)
+>
+> | `meta.breakpoint` | Bedeutung | Server-normalisiert zu |
+> |--------------------|-----------|------------------------|
+> | **`null`**        | Basis / Desktop (empfohlen, kanonisch) | `"desktop"` |
+> | `"desktop"`       | Desktop (semantisch identisch mit null) | `"desktop"` |
+> | `"tablet"`        | Tablet (810–1199px) | `"tablet"` |
+> | `"mobile"`        | Mobile (<810px) | `"mobile"` |
+> | `"laptop"`        | Laptop (Elementor 4.x neues Breakpoint) | `"laptop"` |
+>
+> → **Immer `null` für die Basis-Variante.** Der Server akzeptiert `"desktop"`
+>   zwar, normalisiert es aber zu sich selbst — das kann auf verschiedenen
+>   WP-Setups anders dokumentiert sein als `null`. `null` ist die
+>   stable-across-versions Konvention (siehe `framer-pre-build-validate.js`
+>   Guard G9).
+
 **Auto-Wrap-Regel:** Scalare Werte werden server-seitig automatisch in `{"$$type":"...","value":...}` verpackt. Die Spalte "Ergonomisch (schreiben)" zeigt was du eingibst, "Expanded (gespeichert)" was daraus wird.
 
 ---

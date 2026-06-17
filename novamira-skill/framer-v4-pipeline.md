@@ -38,9 +38,25 @@ Dieser Skill ersetzt das manuelle Nachschlagen in BLUEPRINT.md.
 ## 18-Schritt Workflow
 
 ### Phase 0: MCP-Check (PFLICHT vor jedem Start)
-- Pruefe Novamira MCP: novamira/adrians-setup-v4-foundation Test-Call
-- Pruefe Unframer MCP: Framer XML abrufbar?
-- Fehlt ein MCP -> STOP, User informieren
+
+**Reihenfolge (alle neu seit Sprint 17-E2E):**
+
+```
+0a. Unframer MCP erreichbar?     → node scripts/preflight/check-unframer-connectivity.js
+0b. XML-Projekt-Match?           → node scripts/preflight/verify-xml-project-match.js --xml tools/framer-export/homepage.xml --target-url <framer-url>
+0c. Guards-Klasse verfügbar?     → siehe session-start-checklist.md Schritt 2b
+0d. V4-Experiments aktiv?        → siehe session-start-checklist.md Schritt 2c → ensure-elementor-experiments.js
+0e. Novamira MCP erreichbar?     → novamira/adrians-setup-v4-foundation (oder elementor-check-setup als günstigen Call)
+0f. Framer XML abrufbar?         → aus 0a ableitbar; bei FEHLER → web_fetch Fallback (siehe dual-source-workflow.md)
+```
+
+**Wenn ein MCP-Check fehlschlägt (STOP — User informieren):**
+
+- **Unframer nicht erreichbar:** Fallback A/B/C aus `dual-source-workflow.md` "Fallback wenn Unframer MCP nicht erreichbar".
+- **XML-Mismatch:** Frisches XML vom aktuellen Projekt erstellen — siehe `verify-xml-project-match.js` Output für Anleitung.
+- **Guards fehlen:** Fallback-Pfad 9a/10a-c aktivieren.
+- **V4-Experiments inaktiv:** `ensure-elementor-experiments.js` ausführen, danach ggf. erneut Phase-3.
+- **Novamira MCP down:** Diagnose (siehe Fehlerbehebung-Tabellen), Recovery A/B/C.
 
 ### Phase 1: Setup
 ```
@@ -112,17 +128,79 @@ Score < 85% = Build wird blockiert. Alle 12 Guards muessen gruen sein.
 
 ### Phase 3: Build
 
-**Schritt 9** - Foundation aufrufen (IMMER live, nie aus Memory):
+**Schritt 9a** — Guards-Check (NEU — P1-B / BLOCKADE 3)
+```
+MCP: novamira/execute-php { code: "return class_exists('Novamira\\AdrianV2\\Helpers\\Guards') ? 'OK' : 'FEHLT';" }
+```
+
+**Bei `OK`:** Weiter mit Schritt 10.
+
+**Bei `FEHLT`:** Fallback-Pfad aktivieren:
+
+```
+10a. novamira/create-post { title, slug, status, post_type: page }  → POST_ID
+10b. novamira/execute-php { code: "update_post_meta(<id>, '_wp_page_template', 'elementor_canvas'); return true;" }
+     → Hinweis: 'elementor_header_footer' ist ohne Pro fragiler → canvas bevorzugen.
+10c. novamira/elementor-set-content { post_id, content: V4_TREE_ARRAY }
+     → ⚠️ ACHTUNG: Parameter heißt `content`, NICHT `elements`! (Falle)
+```
+
+In `SESSION-STATE.md` vermerken: `BATCH_BUILD_PAGE_UNAVAILABLE=true`.
+
+**Schritt 9** — Foundation aufrufen (IMMER live, nie aus Memory):
 ```
 MCP: novamira/adrians-setup-v4-foundation { "post_id": POST_ID }
 ```
 Gibt e-gv-* IDs und gc-* IDs zurueck. NUR diese IDs verwenden!
 
-**Schritt 10** - Build ausfuehren:
+**Schritt 10** — Build ausführen:
+
+**Template-Auswahl (nach Pro-Status — NEU P3-G):**
+
+| Elementor Pro | Empfohlenes Template   | Grund |
+|--------------|----------------------|-------|
+| Aktiv         | `elementor_header_footer` | Vollständige Theme-Kontrolle |
+| **Nicht aktiv** | **`elementor_canvas`**  | Robuster ohne Pro, weniger Theme-Konflikte |
+
+Prüfe Pro-Status in Session-Start Schritt 2 (`elementor_pro.active`).
+
 ```
-MCP: novamira/elementor-set-content { "post_id": POST_ID, "content": V4_TREE }
+MCP: novamira-adrianv2/batch-build-page { post_id: POST_ID, elements: [...V4_TREE...] }
 ```
-Bei grossen Trees: erst per build-dependency-graph.js nach Sections aufteilen.
+
+**Wenn `batch-build-page` nicht verfügbar (siehe Schritt 9a FEHLT):**
+```
+MCP: novamira/elementor-set-content { content: [...V4_TREE...], post_id: POST_ID }
+```
+
+**Ability-Parameter-Unterschiede (NEU P2-E / SCHWÄCHE 3 — Fallstrick-Referenz):**
+
+| Ability                           | Tree-Parameter       | Template             | CSS nach Build       |
+|-----------------------------------|---------------------|---------------------|---------------------|
+| `novamira-adrianv2/adrians-batch-build-page` | `elements`    | `template: "..."`   | ✅ Auto             |
+| `novamira/elementor-set-content`   | **`content`**        | — (separat)         | ❌ Manuell nötig    |
+
+→ **Falle:** `elements` vs `content`! Bei Fallback (set-content) ist `content`
+   ein Array, nicht `elements`. Sofortiger Abbruch bei Verwechslung.
+
+Bei grossen Trees: erst per `build-dependency-graph.js` nach Sections aufteilen.
+
+**Schritt 11** — CSS-Cache Force-Rebuild (NEU — P1-C / BLOCKADE 7, PFLICHT nach `set-content`)
+
+Ohne diesen Schritt kann die Seite **leer erscheinen** trotz korrektem Content
+(separat von Blockade 4 — kann auch bei korrekten Experiments passieren):
+
+```
+Tool: novamira/execute-php
+code: |
+  \Elementor\Plugin::$instance->files_manager->clear_cache();
+  $css = new \Elementor\Core\Files\CSS\Post(<POST_ID>);
+  $css->update();
+  return ['css_rebuilt' => true];
+```
+
+→ `batch-build-page` macht das automatisch.
+→ `set-content` NICHT — hier muss manuell rebuildet werden.
 
 ### Phase 4: Post-Build QA
 
@@ -201,6 +279,9 @@ Ersetzt N einzelne elementor-get-content Calls.
 | GV-ID Drift (schnell) | e-gv-* nicht im Design-System | adrians-variable-audit { report: "drift" } -> Schritt 16 |
 | Pass-through nach Build | Zu tiefe Verschachtelung | adrians-layout-audit -> IDs notieren -> patch-element-styles |
 | Responsive fehlt | Global Class ohne mobile Variant | adrians-add-global-class-variant (kein Tree-Rebuild) |
+| **Seite blank trotz `runtime_available: true`** | **e_atomic_elements deaktiviert** | **Pre-Schritt 2c: `ensure-elementor-experiments.js`** |
+| **Seite blank DIREKT nach `elementor-set-content`** | **CSS-Cache nicht neu gebaut** | **Schritt 11 manuell ausführen** |
+| **`batch-build-page` PHP Fatal: Class "Guards" not found** | **AdrianV2-Plugin veraltet/anders** | **Schritt 9a Guards-Check → Fallback-Pfad (10a-c)** |
 
 ## Artefakt-Dateinamen
 

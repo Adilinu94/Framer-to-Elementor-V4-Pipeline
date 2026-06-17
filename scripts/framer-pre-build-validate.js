@@ -438,6 +438,154 @@ function g12_ImageSrcFormat() {
 }
 
 // ─────────────────────────────────────────────
+// 13. LINE_HEIGHT_UNIT  [SCHWAECHE 1 / P2-B]
+// ─────────────────────────────────────────────
+//
+// Hintergrund (E2E-Verbesserungsbericht Schwaeche 1):
+//   line-height als number (z.B. 1.2) wird server-seitig zu
+//   { size:1.2, unit:"px" } gewrappt → CSS line-height:1.2px (kaputt).
+//   Ein String "1.2" bleibt "1.2" (CSS line-height:1.2, OK).
+//   Skalare mit unit "em" (1.5em) sind semantisch korrekt.
+//
+// Moegliche problematische Werte:
+//   A. typeof === 'number'                                                          → Garantierter Bug
+//   B. $$type:"size", unit:"px", size < 5                                          → Wahrscheinlich em gemeint
+//   C. typeof === 'string', matches /^\\d+px$/ (z.B. "1.2px")                       → Sollte em oder String sein
+//   D. typeof === 'string', matches /^\\d+$/ (z.B. "1")                             → Unitless-OK weil CSS line-height akzeptiert
+//
+// Schwellwert 5 als Heuristik fuer "probably em":
+//   CSS line-height:1px..5px ist optisch bedeutungslos (effektiv kein spacing).
+//
+function g13_LineHeightUnit() {
+  const offenders = [];
+
+  for (const node of nodes) {
+    walkValues(node.styles, (key, val, parent, p) => {
+      const propKey = key?.toLowerCase?.() || '';
+      const parentType = parent?.['$$type'];
+
+      // Fall A: bare number
+      if (propKey === 'line-height' && typeof val === 'number') {
+        offenders.push({
+          path: p,
+          nodeId: node.id,
+          issue: `line-height: ${val} (number) wird zu ${val}px gewrappt (CSS: line-height: ${val}px — kaputt)`,
+          fix: `Verwende "line-height": {"$$type":"size","value":{"size":${val},"unit":"em"}} oder einfach "line-height": "${val}" (String)`,
+          severity: 'error',
+        });
+        return;
+      }
+
+      // Fall B: size wrapper, unit:"px", size < 5
+      if (propKey === 'size' && parentType === 'size' && parent.value?.unit === 'px' && typeof parent.value?.size === 'number') {
+        // Wir koennen hier nicht 100%ig wissen dass dies line-height ist,
+        // aber wenn der Pfad "line-height" enthaelt UND die Werte klein sind → Bug.
+        const pathIsLineHeight = p.toLowerCase().includes('line-height');
+        if (pathIsLineHeight && parent.value.size < 5) {
+          offenders.push({
+            path: p,
+            nodeId: node.id,
+            issue: `line-height: ${parent.value.size}px vermutlich falsch (semantisch em gemeint)`,
+            fix: `Aendere unit zu "em" — "line-height": {"$$type":"size","value":{"size":${parent.value.size},"unit":"em"}}`,
+            severity: 'warning',
+          });
+        }
+      }
+
+      // Fall C: line-height prop als String "1.2px" o.ae.
+      if (propKey === 'line-height' && typeof val === 'string' && /^\d+(\.\d+)?px$/.test(val.trim())) {
+        offenders.push({
+          path: p,
+          nodeId: node.id,
+          issue: `line-height: "${val}" — px-Unit unueblich fuer line-height`,
+          fix: `Verwende em oder unitless String: "line-height": "${val.replace(/px$/, '')}"`,
+          severity: 'warning',
+        });
+      }
+    });
+  }
+
+  if (offenders.length === 0) {
+    return { id: 'LINE_HEIGHT_UNIT', status: 'PASS', message: 'All line-height values are semantically correct (string or em-unit)' };
+  }
+  return {
+    id: 'LINE_HEIGHT_UNIT', status: 'FAIL', severity: 'error',
+    message: `${offenders.length} line-height value(s) with brittle unit (px or bare number)`,
+    details: { offenders: offenders.slice(0, 10) },
+  };
+}
+
+// ─────────────────────────────────────────────
+// 14. STYLE_ID_HYPHEN  [SCHWAECHE 2 / P2-C]
+// ─────────────────────────────────────────────
+//
+// Hintergrund (E2E-Verbesserungsbericht Schwaeche 2 + Invariant III):
+//   Style-IDs mit Hyphens (z.B. "s-hero-title") sind in der Doku verboten, aber
+//   der Server akzeptiert sie stillschweigend. Das Verhalten kann auf
+//   verschiedenen WP-Setups abweichen. Wir enforcen [a-z][a-z0-9_]*.
+//
+// Gilt fuer:
+//   - Keys in element.styles{}           (z.B. styles["s-hero"])
+//   - Werte in settings.classes.value[]  (z.B. "s-hero-title" — sollte remappt sein)
+//   - Eigene element.id                    (Render-IDs, koennen flexibler sein aber konsistent halten)
+//
+function g14_StyleIdHyphen() {
+  const validStyleId = /^[a-z][a-z0-9_]*$/;
+  const violations = [];
+
+  for (const node of nodes) {
+    // 1. Style-IDs in styles{} Keys
+    for (const styleId of Object.keys(node.styles || {})) {
+      if (!validStyleId.test(styleId)) {
+        violations.push({
+          where: 'styles-key',
+          nodeId: node.id,
+          styleId,
+          issue: `Style-ID "${styleId}" enthaelt ungueltige Zeichen (erlaubt: a-z, 0-9, _; KEINE Hyphens/Uppercase)`,
+          fix: `sanitizeStyleId("${styleId}") in lib/framer-utils.js anwenden — Output: ${styleId.toLowerCase().replace(/-/g, '_').replace(/[^a-z0-9_]/g, '')}`,
+        });
+      }
+    }
+
+    // 2. Style-IDs in settings.classes.value[]
+    const classesValue = node.settings?.classes?.value || [];
+    if (Array.isArray(classesValue)) {
+      for (const cls of classesValue) {
+        if (typeof cls === 'string' && !validStyleId.test(cls)) {
+          violations.push({
+            where: 'settings-classes-value',
+            nodeId: node.id,
+            className: cls,
+            issue: `classes.value enthaelt "${cls}" — ungueltiges Format (erlaubt: a-z, 0-9, _)`,
+            fix: `sanitizeStyleId auf alle classes-Werte anwenden`,
+          });
+        }
+      }
+    }
+
+    // 3. Eigene element.id (Render-IDs — Issue, wenn auch in Styles referenziert)
+    if (node.id && typeof node.id === 'string' && !validStyleId.test(node.id)) {
+      violations.push({
+        where: 'element-id',
+        nodeId: node.id,
+        issue: `element.id "${node.id}" hat ungueltiges Format — sollte fuer Konsistenz auch [a-z][a-z0-9_]* sein`,
+        fix: `uniqueWidgetId() in convert-xml-to-v4.js normalisiert bereits; pruefe Quell-Naming`,
+        severity: 'warning',
+      });
+    }
+  }
+
+  if (violations.length === 0) {
+    return { id: 'STYLE_ID_HYPHEN', status: 'PASS', message: 'All style IDs and class values conform to [a-z][a-z0-9_]* pattern (no hyphens)' };
+  }
+  return {
+    id: 'STYLE_ID_HYPHEN', status: 'FAIL', severity: 'error',
+    message: `${violations.length} style ID(s) or classes.value(s) with invalid characters (Invariant III)`,
+    details: { violations: violations.slice(0, 10) },
+  };
+}
+
+// ─────────────────────────────────────────────
 // RUN ALL GUARDS
 // ─────────────────────────────────────────────
 
@@ -454,6 +602,8 @@ const guards = [
   g10_TabletVariants(),
   g11_BackgroundColorGC(),
   g12_ImageSrcFormat(),
+  g13_LineHeightUnit(),   // SCHWAECHE 1 / P2-B
+  g14_StyleIdHyphen(),    // SCHWAECHE 2 / P2-C
 ];
 
 // ─────────────────────────────────────────────

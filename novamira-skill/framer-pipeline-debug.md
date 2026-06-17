@@ -133,3 +133,111 @@ Expected: `{"jsonrpc":"2.0","id":1,"result":{"sessionId":"...","capabilities":{.
 3. `mcp-adapter-discover-abilities` live abfragen — Ability-Liste verifizieren
 4. `tasks/todo.md` öffnen — bekannte offene Issues
 5. `PIPELINE_AUDIT_REPORT.md` und `V4_DESIGN_SCHEMA_REPORT.md` lesen
+
+---
+
+## Neue Symptome aus E2E-Verbesserungsbericht (Sprint 17, 17. Juni 2026)
+
+| Symptom | Ursache | Fix |
+|---------|---------|-----|
+| **Seite blank trotz `atomic.runtime_available: true`** | **`e_atomic_elements` Experiment inaktiv** (check-setup prüft nur PHP-Klassen, nicht Experimente) | **`node scripts/preflight/ensure-elementor-experiments.js --post-id ID`** (Session-Start Schritt 2c) |
+| **Seite blank DIREKT nach `elementor-set-content`** | **CSS-Cache nicht neu gebaut** (separat von Experiment-Issue) | **Schritt 11 in framer-v4-pipeline.md: `files_manager->clear_cache()` + `CSS\Post::update()`** |
+| **`batch-build-page` PHP Fatal: Class "Guards" not found** | **AdrianV2-Plugin veraltet/anders** (Guards fehlt im Plugin-Code) | **Schritt 9a Guards-Check → Fallback-Pfad 10a-c (`create-post`+`set-content`)** |
+| **`set-content` Error: `content` ist erforderliche Eigenschaft** | **Parameter heißt `content`, nicht `elements`** | **siehe framer-v4-pipeline.md Schritt 9a (Ability-Parameter-Tabelle)** |
+| **`nav` als Tag invalid in e-flexbox** | **Tag-Enum unterstützt nur: div,header,section,article,aside,footer,a,button** | **`sanitizeContainerTag()` in convert-xml-to-v4.js aktiv (P2-A)** |
+| **Falsche XML produziert komplett falschen V4-Build** | **`homepage.xml` gehört zu anderem Framer-Projekt** | **`node scripts/preflight/verify-xml-project-match.js --xml ... --target-url ...`** |
+| **XML ohne `framer-project-id` Kommentar** | **Konsistenz fehlt** | **Kommentar ergänzen + Skript erneut ausführen (siehe `verify-xml-project-match.js` Output)** |
+| **Unframer MCP nicht erreichbar** | **Sandbox-Allowlist / 5s Timeout / HTTP-Fehler** | **`node scripts/preflight/check-unframer-connectivity.js` — Fallback A/B/C in dual-source-workflow.md** |
+| **MCP-Server 4-Min-Timeout (alle Calls)** | **Novamira-WP-Plugin abgestürzt oder hängt** | **MCP-Resilienz-Strategie unten (P3-D)** |
+
+## MCP-Resilienz-Strategie (NEU — SCHWÄCHE 10 / P3-D)
+
+### Symptom
+
+Alle (oder mehrere) MCP-Calls laufen in 4-Minuten-Timeout. Outputs kommen gar nicht oder nur teilweise zurück. Auch einfache Calls wie `discover-abilities` betroffen.
+
+### Mögliche Ursache
+
+Der MCP-Server (Novamira PHP-Plugin im WP) ist abgestürzt oder hängt. Häufige Auslöser: OOM, PHP-FPM-Pool ausgelastet, lange vorherige Calls ohne sauberes Cleanup, gleichzeitige Calls aus mehreren Agenten.
+
+### Diagnose (Pflicht vor Recovery)
+
+```bash
+# Schritt 1: Einfachster möglicher Test-Call
+Tool: novamira-adrianv2/greet
+Parameters: { name: "test" }
+
+# Antwortet schnell?   → nur die spezifische Ability war kaputt (Bug im Plugin)
+# Timeout?             → MCP-Server down — Recovery unten
+```
+
+### Recovery-Pfad (in dieser Reihenfolge versuchen)
+
+```
+A. Claude Desktop neu starten (reconnect, neue Session)
+   → Bei Erfolg: session-start-checklist.md Schritt 1-5 neu durchlaufen
+   → KEIN Effekt? Weiter mit B.
+
+B. WP-Admin → Plugins → Novamira deaktivieren + reaktivieren
+   → Bei Erfolg: Schritt 1-5 neu durchlaufen (frische GV/GC-IDs!)
+   → KEIN Effekt? Weiter mit C.
+
+C. PHP-FPM-Prozesse neu starten
+   → NUR möglich wenn SSH-Zugriff zum Server
+   → Auf solar.local via LocalWP: Stop + Start in der LocalWP UI
+   → Auf test4: Service-Management via Hosting-Panel oder SSH
+```
+
+### Retry-Logik für Pipeline-Scripts (Best Practice)
+
+```javascript
+// scripts/lib/mcp-retry.js (Pattern für eigene Scripts)
+async function mcpCallWithRetry(abilityName, params, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 30000); // 30s pro Versuch
+      const result = await mcp.call(abilityName, params, { signal: ctrl.signal });
+      clearTimeout(t);
+      return result;
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        // Timeout — bei attempt 0/1: retry (könnte temporäre Last sein)
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); // 2s, 4s backoff
+          continue;
+        }
+      }
+      throw e; // andere Fehler: kein Retry
+    }
+  }
+}
+```
+
+Wichtig: Retry nur für **Timeout**-Cases, **nicht** für andere Fehler (z.B. 500 PHP Fatal → Retry macht es schlimmer, nicht besser).
+
+### Vermeidung (Best Practice im Build)
+
+1. **Große Calls splitten:** Statt `elementor-set-content` mit 5000 Nodes → `build-dependency-graph.js` → Sections einzeln.
+2. **Nicht-parallele MCP-Calls:** Mehrere Calls parallel aus demselben Agent überlasten den PHP-FPM-Pool. Sequentiell halten oder throttle.
+3. **Nach `batch-build-page` IMMER 2-3s warten** bevor nächster Call.
+
+---
+
+## Quick-Reference: Welcher Preflight-Script hilft bei welchem Build-Fehler?
+
+| Fehler-Symptom                          | Preflight-Script                                          | Pflicht in Phase 0 / Session-Start? |
+|----------------------------------------|-----------------------------------------------------------|-------------------------------------|
+| `Class "Guards" not found` Fatal       | `novamira/execute-php { class_exists(...) }` (in Schritt 2b) | Schritt 2b — Session-Start          |
+| Seite blank trotz `runtime_available:true` | `ensure-elementor-experiments.js --post-id ID`         | Schritt 2c — Session-Start          |
+| V4-Tree passt nicht zur Framer-Seite   | `verify-xml-project-match.js --xml ... --target-url ...`  | Phase 0 (vor Phase 2 Extraction)    |
+| Pipeline scheitert in Phase 1 (kein XML) | `check-unframer-connectivity.js` → Fallback A/B/C        | Phase 0 (vor Phase 1 MCP-Aufrufen) |
+| C6-Substitution oder G3-Guard Failure  | Kein eigener Preflight (Standard Phase 2)                 | —                                    |
+| Post-Build: Seite blank trotz OK-Build | `rendering sanity check` (post-build-qa.md Schritt 0) + Schritt 11 | Post-Build (Pflicht)                 |
+
+→ **Empfehlung:** Vor jedem Wizard-Start:
+```bash
+node scripts/preflight/ensure-elementor-experiments.js --dry-run
+node scripts/preflight/check-unframer-connectivity.js
+node scripts/preflight/verify-xml-project-match.js --xml tools/framer-export/homepage.xml --target-url <URL>
+```

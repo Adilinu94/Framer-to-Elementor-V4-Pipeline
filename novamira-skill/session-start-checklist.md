@@ -49,6 +49,76 @@ Parameters: {}
 
 ---
 
+### ✅ Schritt 2b — AdrianV2 Guards-Klasse verfügbar? [NEU — P1-B]
+
+**Hintergrund:** Ohne `Novamira\AdrianV2\Helpers\Guards` schlagen alle
+`novamira-adrianv2/adrians-*` Abilities mit PHP Fatal fehl
+(`Class "Novamira\AdrianV2\Guards" not found`).
+Betroffen u.a.: `batch-build-page`, `page-settings`, `batch-create-variables`,
+`patch-element-styles`. Dann muss der Fallback-Pfad genutzt werden.
+
+```bash
+Tool: novamira-solar-local:mcp-adapter-execute-ability
+ability_name: "novamira/execute-php"
+parameters:
+  code: "return class_exists('Novamira\\AdrianV2\\Helpers\\Guards') ? 'OK' : 'FEHLT';"
+```
+
+**Bei `OK`:** Weiter mit Schritt 2c.
+
+**Bei `FEHLT`:** Fallback-Pfad aktivieren (siehe `framer-v4-pipeline.md` Schritt 9a):
+
+1. `novamira/create-post` (title, slug, status, post_type: page)
+2. `novamira/execute-php` → `_wp_page_template` setzen (z.B. `elementor_canvas`)
+3. `novamira/elementor-set-content` (Parameter: `content`, `post_id` — **Array!**)
+
+In `SESSION-STATE.md` vermerken: `BATCH_BUILD_PAGE_UNAVAILABLE=true`.
+
+### ✅ Schritt 2c — V4-Experiments aktiv? [NEU — P1-A / BLOCKADE 4]
+
+**Hintergrund:** Ohne `e_atomic_elements` rendern V4-Widgets nicht (HTTP 200,
+leerer Body, kein Konsolen-Error). `elementor-check-setup` bestätigt nur
+`atomic.runtime_available: true` (PHP-Klassen geladen), prüft aber NICHT
+ob die Experimente aktiv sind. Daher separater Gate.
+
+Pflicht-Experiments:
+- `e_atomic_elements` (V4 Atomic Widgets)
+- `e_opt_in_v4`       (V4 Rendering-Stack)
+- `e_variables`       (e-gv-* Variablen-Auflösung)
+- `e_classes`         (Global Classes gc-*)
+
+```bash
+# Preflight-Script mit MCP auto-call:
+node scripts/preflight/ensure-elementor-experiments.js --post-id TARGET_POST_ID
+
+# Dry-Run (nur Status):
+node scripts/preflight/ensure-elementor-experiments.js --dry-run
+```
+
+**Erwartetes Ergebnis (dry-run):**
+```json
+{
+  "ok": true, "dry_run": true,
+  "state": {
+    "e_atomic_elements": { "is_active": true,  "in_options": "active" },
+    "e_opt_in_v4":       { "is_active": true,  "in_options": "active" },
+    "e_variables":       { "is_active": true,  "in_options": "active" },
+    "e_classes":         { "is_active": true,  "in_options": "active" }
+  }
+}
+```
+
+Wenn `activated: ["..."]` zurückgegeben → Scripts hat die Experimente
+gerade aktiviert; CSS-Cache wurde ebenfalls neu gebaut (wenn `--post-id`).
+
+**Bekannte Einschränkung — e_css_grid:** Hat `release_status: "dev"`.
+Aktivierung via Option wird von Elementor auf Default "inactive"
+zurückgesetzt. Workaround im Build: `grid-template-columns` als
+`$$type:"string"` Style-Prop setzen — CSS rendert trotzdem inline.
+
+Siehe auch `style-props-quickref.md` ("Container-Tag Enums") und
+`post-build-qa.md` Schritt 0 (Rendering-Sanity).
+
 ### ✅ Schritt 2 — V4 Atomic Runtime verfügbar?
 
 ```
@@ -190,11 +260,16 @@ Wenn ein MCP-Call mit HTTP 401 oder 419 antwortet:
 ```
 [Session-Start]
   │
-  ├── 1. mcp-adapter-discover-abilities      → Verbindung OK?
-  ├── 2. elementor-check-setup               → V4 runtime_available?
-  ├── 3. adrians-setup-v4-foundation         → Frische GV/GC-IDs
-  ├── 4. (optional) wpcode check             → WPCode aktiv?
-  └── 5. adrians-export-design-system        → Token-Basis für Build
+  ├── 1.  mcp-adapter-discover-abilities      → Verbindung OK?
+  ├── 2.  elementor-check-setup               → V4 runtime_available?
+  ├── 2b. AdrianV2 Guards verfuegbar?         → class_exists Check [NEU P1-B]
+  ├── 2c. ensure-elementor-experiments        → 4 Pflicht-Experiments aktiv? [NEU P1-A]
+  ├── 3.  adrians-setup-v4-foundation         → Frische GV/GC-IDs
+  ├── 4.  (optional) wpcode check             → WPCode aktiv?
+  └── 5.  adrians-export-design-system        → Token-Basis für Build
          │
          └── [Build starten → framer-v4-pipeline Skill]
 ```
+
+**WICHTIG:** Schritt 2b vor 2c! Wenn Guards fehlen, scheitern viele
+Abilities im Build — daher zuerst checken, dann ggf. Fallback-Pfad.
