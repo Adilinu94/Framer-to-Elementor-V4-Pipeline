@@ -5,14 +5,22 @@
  * Wird von convert-xml-to-v4.js aufgerufen wenn getProjectXml() keine
  * Style-Daten liefert (Unframer MCP offline oder leere StyleMap).
  *
+ * Sprint 20 (Repo-Review Punkt #6): Wiederverwendet fetchPageHtml(),
+ * extractStyleBlocks(), extractCssVariables(), extractBreakpoints() aus
+ * extract-framer-css-tokens.js statt eigener, abweichender Regex-Kopien zu
+ * pflegen. Eigenständig bleibt nur die `.framer-text-*`-Klassen-Extraktion
+ * für textStyles — das macht extract-framer-css-tokens.js NICHT (sein
+ * textStyles-Feld ist ein statischer Platzhalter, siehe TEXT_STYLE_DEFAULTS
+ * dort), daher ist das hier der eigentliche Mehrwert dieses Scripts.
+ *
  * Strategie:
  *   1. Prüft ob ein Framer-Export-HTML vorhanden ist (--html)
- *   2. Oder crawlt die publizierte Framer-URL (--url)
- *   3. Extrahiert CSS-Tokens via extract-framer-css-tokens.js Logik
+ *   2. Oder crawlt die publizierte Framer-URL (--url), inkl. externer
+ *      Stylesheets (via fetchPageHtml aus extract-framer-css-tokens.js)
+ *   3. Extrahiert Farb-Tokens + TextStyle-Klassen
  *   4. Schreibt token-mapping.json + style-map.json als Fallback
  *
- * Wird intern von pipeline-run-with-fallback.js importiert.
- * Kann auch standalone genutzt werden:
+ * Kann standalone genutzt werden:
  *   node scripts/css-fallback-extractor.js --url https://foo.framer.app/ --output-dir FramerExport/tokens/
  *
  * Exit-Codes:
@@ -25,7 +33,8 @@ import fs   from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { normalizeHex } from './lib/framer-utils.js';
+import { fetchPageHtml, extractStyleBlocks, extractCssVariables, extractBreakpoints } from './extract-framer-css-tokens.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,18 +74,13 @@ export function styleMapIsEmpty(styleMapPath) {
 }
 
 /**
- * Crawlt die Framer-URL und extrahiert CSS-Tokens.
+ * Crawlt die Framer-URL (inkl. externer Stylesheets) und extrahiert CSS-Tokens.
  * Gibt { tokenMapping, styleMap } zurück oder null bei Fehler.
  */
 async function fetchCssTokens(url) {
   info(`CSS-Fallback: Lade Framer-Seite ${url}`);
   try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(30_000),
-      headers: { 'User-Agent': 'framer-v4-pipeline/css-fallback' },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const html = await res.text();
+    const html = await fetchPageHtml(url); // inkl. <link rel="stylesheet"> Auflösung
     return parseCssFromHtml(html, url);
   } catch (e) {
     warn(`Fetch fehlgeschlagen: ${e.message}`);
@@ -92,28 +96,30 @@ function loadHtmlTokens(htmlPath) {
 
 /**
  * Extrahiert CSS-Variablen, Farben, TextStyles aus HTML/CSS.
+ * Nutzt die geteilten Extraktoren aus extract-framer-css-tokens.js für
+ * Style-Blöcke/CSS-Variablen/Breakpoints; die .framer-text-*-Klassen-
+ * Extraktion (textStyles) bleibt hier, da sie sonst nirgends existiert.
  * Gibt { tokenMapping, styleMap } zurück.
  */
 function parseCssFromHtml(html, source) {
-  // Alle <style>-Blöcke + inline style-Attribute zusammenführen
-  const styleBlocks = [];
-  const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
-  let m;
-  while ((m = styleRe.exec(html)) !== null) styleBlocks.push(m[1]);
+  const styleBlocks = extractStyleBlocks(html);
   const css = styleBlocks.join('\n');
 
-  // ── Farb-Tokens (CSS Custom Properties) ────────────────────────────────────
+  // ── Farb-Tokens (CSS Custom Properties) — via extract-framer-css-tokens.js ──
+  // extractCssVariables() liefert name bereits MIT führendem "--" (kein Re-Prefix nötig)
+  const cssVars = extractCssVariables(styleBlocks);
   const colorMap = {};
-  const colorVarRe = /--([\w-]+)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))/g;
-  let cv;
-  while ((cv = colorVarRe.exec(css)) !== null) {
-    const hex = normalizeHex(cv[2]);
-    if (hex) colorMap[`--${cv[1]}`] = hex;
+  for (const v of cssVars) {
+    const hex = normalizeHex(v.value);
+    if (hex) colorMap[v.name] = hex;
   }
   log(`CSS-Fallback: ${Object.keys(colorMap).length} Farb-Tokens gefunden`);
 
-  // ── TextStyles aus CSS-Klassen ──────────────────────────────────────────────
-  // Framer rendert TextStyles als .framer-text-* Klassen
+  // ── TextStyles aus CSS-Klassen (eigenständige Logik, kein Duplikat) ─────────
+  // Framer rendert TextStyles als .framer-text-* Klassen. Weder
+  // extract-framer-css-tokens.js noch extract-framer-styles.js extrahieren
+  // benannte Style-Klassen in dieses style-map.json-Schema — das ist der
+  // eigentliche Mehrwert dieses Scripts gegenüber den bestehenden Extraktoren.
   const textStyles = {};
   const classRe = /\.(framer-[\w-]+)\s*\{([^}]+)\}/g;
   let cr;
@@ -139,15 +145,12 @@ function parseCssFromHtml(html, source) {
   }
   log(`CSS-Fallback: ${Object.keys(textStyles).length} TextStyle-Klassen gefunden`);
 
-  // ── Breakpoints ─────────────────────────────────────────────────────────────
-  const breakpoints = [];
-  const bpRe = /@media[^{]*\(max-width\s*:\s*(\d+)px\)/g;
-  let bp;
-  while ((bp = bpRe.exec(css)) !== null) {
-    const px = parseInt(bp[1]);
-    if (!breakpoints.includes(px)) breakpoints.push(px);
-  }
-  breakpoints.sort((a, b) => b - a);
+  // ── Breakpoints — via extract-framer-css-tokens.js ──────────────────────────
+  // extractBreakpoints() liefert [{ label, width: "810px", raw: 810 }], absteigend sortiert
+  const rawBreakpoints = extractBreakpoints(styleBlocks);
+  const breakpoints = rawBreakpoints
+    .map(b => b.raw)
+    .filter((px, i, arr) => typeof px === 'number' && arr.indexOf(px) === i);
 
   const tokenMapping = {
     meta: { source, source_type: 'css-fallback', generated_at: new Date().toISOString() },
@@ -160,20 +163,6 @@ function parseCssFromHtml(html, source) {
   const styleMap = { textStyles, colorStyles: colorMap };
 
   return { tokenMapping, styleMap };
-}
-
-function normalizeHex(val) {
-  if (!val) return null;
-  val = val.trim();
-  if (val.startsWith('#')) {
-    const hex = val.slice(1);
-    if (hex.length === 3) return '#' + hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-    if (hex.length === 6) return val.toLowerCase();
-    if (hex.length === 8) return ('#' + hex.slice(0, 6)).toLowerCase();
-  }
-  const m = val.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (m) return '#' + [m[1], m[2], m[3]].map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
-  return null;
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────

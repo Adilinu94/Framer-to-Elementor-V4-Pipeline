@@ -203,3 +203,47 @@
 ### Offen (nächste Session)
 - [ ] Fix #8: Helpers-Guard in `batch-create-variables`
 - [ ] Novamira Fixes 4–8: batch-get-content, variable-audit, memory-auto-fill, patch-element-styles multi-post, skill-list
+
+---
+
+## ✅ Sprint 20 Fixes (2026-06-21) — Repo-Review-Punkte
+
+### Punkt #1 — Automatisierte Tests für Sprint-19-Fixes
+- [x] `tests/sprint19-fixes.test.js`: 26 Tests für alle 9 Sprint-19-Fixes
+- [x] In `npm test` + `npm run test:all` eingebunden (lief vorher nirgends!)
+- [x] 2 echte Bugs während Test-Entwicklung gefunden & gefixt:
+  - `session-init.js --update-session-state` traf den falschen von zwei `process.exit(0)`-Aufrufen und lief nie
+  - `--prefer-gc` machte background für `generate-global-classes.js` komplett unsichtbar (kein `--gc-candidates`-Mechanismus vorhanden)
+
+### Punkt #2 — chalk-Fehler in tools/framer-export
+- [x] Kein Repo-Bug — CI installiert bereits korrekt separat. Nur Sandbox-Setup-Schritt nachgeholt.
+- [x] Dokumentiert in `CONVENTIONS.md` Abschnitt 5, damit es nicht wieder verwechselt wird.
+
+### Punkt #3 — CLI-Flag-Namenskonvention
+- [x] `CONVENTIONS.md`: IST-Zustand dokumentiert (--xml/--tree/--project-xml/--element-tree/--unframer-xml)
+- [x] Zielkonvention für neue Scripts festgelegt (--input/--tree/--output/--style-map/--tokens)
+- [x] Bewusst KEINE bestehenden Flags umbenannt (Breaking Change, hoher Blast-Radius für Skills/Agent-Workflows)
+
+### Punkt #4 — --gc-candidates generalisiert
+- [x] Schema von `{ background: [{id,color}] }` auf `{ "<category>": [{category,id,prop,value}] }` generalisiert
+- [x] Abwärtskompatibilität zum alten Sprint-19-Schema getestet
+- [x] Synthetischer Test mit frei erfundener Kategorie "border" beweist Generalisierung
+
+### Punkt #5 — Pipeline-Dokumentation
+- [x] `PIPELINE.md`: vollständiger Build-Ablauf, beide GC-Modi, Script-Kurzreferenz-Tabelle
+
+### Punkt #6 — CSS-Extraktor-Konsolidierung
+- [x] `css-fallback-extractor.js` nutzt jetzt `fetchPageHtml`/`extractStyleBlocks`/
+      `extractCssVariables`/`extractBreakpoints` aus `extract-framer-css-tokens.js`
+      (jetzt exportiert, `main()` hinter Entry-Point-Guard abgesichert)
+- [x] Bonus: externe Stylesheet-Auflösung (`<link rel="stylesheet">`) jetzt automatisch mit dabei
+- [x] Eigenständige `.framer-text-*`-Klassen-Extraktion bleibt (einziger echter Mehrwert ggü. bestehenden Extraktoren)
+
+### Punkt #7 — WP-Theme-Defaults statt hartkodiert
+- [x] `--theme-defaults <file>` Flag für `convert-xml-to-v4.js`
+- [x] Greift als letzter RC-11-Fallback, bevor auf statisches Inter/32px/#111111 zurückgefallen wird
+- [x] **Wichtige Einschränkung:** Liest KEINE Live-WP-Daten — `theme-defaults.json` muss von
+      einem Agenten mit echtem MCP-Zugriff auf `solar.local` befüllt werden. Diese Session
+      hatte keinen Live-MCP-Zugriff im Sandbox, daher nur Code-Unterstützung, keine echten Werte.
+
+Test-Status nach Sprint 20: **434 / 434 grün** (vorher 407/431 je nach Sandbox-Setup).

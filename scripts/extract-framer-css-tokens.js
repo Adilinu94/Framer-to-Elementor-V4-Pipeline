@@ -23,6 +23,7 @@
  */
 
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { normalizeHex } from './lib/framer-utils.js';
@@ -45,7 +46,11 @@ const warn = (m)    => process.stderr.write(`[warn] ${m}\n`);
 // FETCH
 // ─────────────────────────────────────────────
 
-async function fetchPageHtml(url) {
+// Funktionen unten sind exportiert (Sprint 20 Konsolidierung), damit
+// css-fallback-extractor.js sie wiederverwendet statt eigene, abweichende
+// Regex-Implementierungen zu pflegen (insb. fetchPageHtml inkl. externer
+// Stylesheet-Auflösung war zuvor in css-fallback-extractor.js dupliziert).
+export async function fetchPageHtml(url) {
   log('Fetching:', url);
   const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
@@ -85,7 +90,7 @@ async function fetchPageHtml(url) {
 // EXTRACT STYLE BLOCKS
 // ─────────────────────────────────────────────
 
-function extractStyleBlocks(html) {
+export function extractStyleBlocks(html) {
   const blocks = [];
   const re = /<style[^>]*>([\s\S]*?)<\/style>/gi;
   let m;
@@ -97,7 +102,7 @@ function extractStyleBlocks(html) {
 // EXTRACT CSS VARIABLES (from all style blocks)
 // ─────────────────────────────────────────────
 
-function extractCssVariables(styleBlocks) {
+export function extractCssVariables(styleBlocks) {
   const vars = new Map(); // tokenName → { value, block }
   const allCss = styleBlocks.join('\n');
   const re = /(--[\w-]+)\s*:\s*([^;]+)/g;
@@ -149,7 +154,7 @@ function extractFontFaces(styleBlocks) {
 // EXTRACT BREAKPOINTS
 // ─────────────────────────────────────────────
 
-function extractBreakpoints(styleBlocks) {
+export function extractBreakpoints(styleBlocks) {
   const breakpoints = [];
   const allCss = styleBlocks.join('\n');
   const re = /@media\s*\(max-width\s*:\s*(\d+)px\)/gi;
@@ -389,10 +394,15 @@ async function main() {
   // Node exits with code 0 when the event loop drains, which is safe.
 }
 
-main().catch(e => {
-  process.stderr.write(`FATAL: ${e.message}\n`);
-  // Brief delay avoids UV_HANDLE_CLOSING race on Windows — same root cause
-  // as the natural-exit approach in the success path: process.exit() while
-  // libuv is tearing down fetch handles triggers the assertion.
-  setTimeout(() => process.exit(2), 50);
-});
+// Nur ausführen wenn direkt aufgerufen, nicht wenn als Modul importiert
+// (Sprint 20: css-fallback-extractor.js importiert fetchPageHtml/
+// extractStyleBlocks/extractCssVariables/extractBreakpoints von hier).
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch(e => {
+    process.stderr.write(`FATAL: ${e.message}\n`);
+    // Brief delay avoids UV_HANDLE_CLOSING race on Windows — same root cause
+    // as the natural-exit approach in the success path: process.exit() while
+    // libuv is tearing down fetch handles triggers the assertion.
+    setTimeout(() => process.exit(2), 50);
+  });
+}

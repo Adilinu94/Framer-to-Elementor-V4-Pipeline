@@ -8,9 +8,9 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "test": "node --test tests/pipeline.test.js tests/lib/*.test.js tests/inspect-v4-schemas.test.js tests/phase-1-bug-2-regression.test.js",
+    "test": "node --test tests/pipeline.test.js tests/lib/*.test.js tests/inspect-v4-schemas.test.js tests/phase-1-bug-2-regression.test.js tests/sprint19-fixes.test.js",
     "test:e2e": "node --test tests/e2e.test.js",
-    "test:all": "node --test tests/pipeline.test.js tests/lib/*.test.js && node --test tests/e2e.test.js && node --test tests/integration.test.js",
+    "test:all": "node --test tests/pipeline.test.js tests/lib/*.test.js tests/sprint19-fixes.test.js && node --test tests/e2e.test.js && node --test tests/integration.test.js",
     "test:visual": "node --test tests/visual-regression.test.js",
     "test:integration": "node --test tests/integration.test.js",
     "test:phase4": "node --test tests/lib/elementor-version.test.js tests/lib/wp-theme.test.js tests/lib/pro-fallback.test.js",

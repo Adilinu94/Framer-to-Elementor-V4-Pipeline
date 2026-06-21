@@ -334,20 +334,42 @@ for (const el of allElements) {
 }
 
 // Fix #1 (repair): GC-Kandidaten aus --prefer-gc Begleitdatei einlesen.
-// Diese background-Werte stehen NICHT in props (convert-xml-to-v4.js hat sie
-// bewusst nicht lokal gesetzt) und sind daher für die obige Schleife unsichtbar.
+// Fix #1 (repair) + Sprint 20 (generalisiert): GC-Kandidaten aus --prefer-gc
+// Begleitdatei einlesen. Diese Werte stehen NICHT in props (convert-xml-to-v4.js
+// hat sie bewusst nicht lokal gesetzt) und sind daher für die obige Schleife
+// unsichtbar. Schema: { "<category>": [{ category, id, prop, value }] }.
+// "background" fließt in die bestehende backgroundElements-Pipeline (unverändert),
+// alle anderen Kategorien in eine generische "always-GC"-Pipeline (siehe unten).
+const otherCategoryCandidates = {}; // { <category>: [{ id, filteredProps }] }
+
 if (args['gc-candidates']) {
   const candPath = resolve(args['gc-candidates']);
   if (existsSync(candPath)) {
     try {
       const candidates = JSON.parse(readFileSync(candPath, 'utf8'));
-      const bgCandidates = candidates.background || [];
-      for (const c of bgCandidates) {
-        if (!c.id || !c.color) continue;
-        const filteredProps = { background: { '$$type': 'background', value: { color: c.color } } };
-        backgroundElements.push({ id: c.id, widget: 'unknown', props: filteredProps, filteredProps });
+      let totalLoaded = 0;
+      for (const [category, entries] of Object.entries(candidates)) {
+        if (!Array.isArray(entries)) continue;
+        for (const c of entries) {
+          if (!c.id) continue;
+          // Abwärtskompatibilität: ältere Begleitdateien (Sprint 19) nutzten
+          // { id, color } statt { id, prop, value } für background.
+          const prop = c.prop || category;
+          const value = c.value !== undefined
+            ? c.value
+            : (c.color !== undefined ? { '$$type': 'background', value: { color: c.color } } : undefined);
+          if (value === undefined) continue;
+
+          const filteredProps = { [prop]: value };
+          if (category === 'background') {
+            backgroundElements.push({ id: c.id, widget: 'unknown', props: filteredProps, filteredProps });
+          } else {
+            (otherCategoryCandidates[category] ||= []).push({ id: c.id, filteredProps });
+          }
+          totalLoaded++;
+        }
       }
-      log(`${bgCandidates.length} GC-Kandidat(en) aus ${candPath} geladen`);
+      log(`${totalLoaded} GC-Kandidat(en) aus ${candPath} geladen (Kategorien: ${Object.keys(candidates).join(', ')})`);
     } catch (e) {
       warn(`--gc-candidates konnte nicht gelesen werden: ${e.message}`);
     }
@@ -469,6 +491,40 @@ for (const [sig, { props, elements }] of bgSignatureMap) {    const name = sanit
   log(`GC Background: ${name} (${elements.length} Elemente, Bug-3-Schutz)`);
 }
 } // end else (localBgSet guard — Fix #1)
+
+// Generische "Always-GC"-Kandidaten aus anderen Kategorien (Sprint 20).
+// Gleiche Logik wie Background-GCs: auch bei nur 1 Element wird ein GC
+// vorgeschlagen, da der Wert von convert-xml-to-v4.js bewusst nicht lokal
+// gesetzt wurde (--prefer-gc-artiges Verhalten für diese Kategorie).
+for (const [category, candElements] of Object.entries(otherCategoryCandidates)) {
+  const sigMap = new Map();
+  for (const el of candElements) {
+    const sig = hashSignature(el.filteredProps);
+    if (!sigMap.has(sig)) sigMap.set(sig, { props: el.filteredProps, elements: [] });
+    sigMap.get(sig).elements.push(el.id);
+  }
+  for (const [sig, { props, elements }] of sigMap) {
+    const name = sanitizeGcName(suggestName(category, props, gcIndex++, tokenMapping));
+    const reason = elements.length > 1
+      ? `${elements.length} Elemente mit identischem ${category}-Wert (via --gc-candidates, immer GC)`
+      : `${category} → immer GC (via --gc-candidates), auch bei nur 1 Element`;
+
+    suggestedClasses.push({
+      name,
+      type: category,
+      reason,
+      element_ids: elements,
+      props,
+      mcp_calls: [
+        {
+          ability: 'novamira/adrians-add-global-class-variant',
+          params: { name, type: 'class', props },
+        },
+      ],
+    });
+    log(`GC ${category}: ${name} (${elements.length} Elemente, via --gc-candidates)`);
+  }
+}
 
 // ── Doppelte ungrouped-Eintraege bereinigen ────────────────────────────────
 

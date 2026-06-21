@@ -55,6 +55,12 @@ const { values: args } = parseArgs({
     // wenn style-map leer/fehlend ist.
     'framer-url':  { type: 'string' },  // Publizierte Framer-URL für CSS-Crawl-Fallback
     'framer-html': { type: 'string' },  // Lokales FramerExport HTML als Fallback-Quelle
+    // Sprint 20 (Punkt #7): Optionale WP-Theme-Defaults statt hartkodierter
+    // RC-11-Fallbacks (Inter/32px/#111111). Muss von einem Agenten mit
+    // Live-MCP-Zugriff befüllt werden (z. B. via novamira-Theme-Abilities) —
+    // dieses Script selbst fragt WordPress nicht live ab.
+    // Schema: { "heading": {...}, "body": {...} } (gleiche Felder wie styleMap-Einträge).
+    'theme-defaults': { type: 'string' },
     'prefer-gc':     { type: 'boolean', default: false },
   },
   strict: false,
@@ -600,7 +606,7 @@ function detectGridLayout(xmlNode, attrs) {
  * @param {object|null} [xmlNode] - XML-Node (für Grid-Detection)
  * @returns {object} V4-Style-Props
  */
-function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageMap, xmlNode = null, styleMap = null, elementId = null) {
+function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageMap, xmlNode = null, styleMap = null, elementId = null, themeDefaults = null) {
   const props  = {};
   const { stackDirection, stackGap, padding, maxWidth, width, height,
           backgroundColor, 'background-color': bgColor,
@@ -647,7 +653,13 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
           // Fix #1 (repair): background NICHT lokal, aber als GC-Kandidat sammeln —
           // sonst kann generate-global-classes.js den Wert nicht sehen (er steht
           // in keinem props-Feld mehr).
-          pendingGcCandidates.push({ id: elementId, color: resolved });
+          // Generisches Schema (Sprint 20): { category, id, prop, value }
+          pendingGcCandidates.push({
+            category: 'background',
+            id: elementId,
+            prop: 'background',
+            value: { '$$type': 'background', value: { color: resolved } },
+          });
         }
       }
     }
@@ -677,7 +689,13 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
           props['background'] = { '$$type': 'background', value: { color: resolved } };
         } else if (elementId) {
           // Fix #1 (repair): GC-Kandidat sammeln (siehe Begründung oben).
-          pendingGcCandidates.push({ id: elementId, color: resolved });
+          // Generisches Schema (Sprint 20): { category, id, prop, value }
+          pendingGcCandidates.push({
+            category: 'background',
+            id: elementId,
+            prop: 'background',
+            value: { '$$type': 'background', value: { color: resolved } },
+          });
         }
       }
     }
@@ -792,17 +810,45 @@ function buildStyleProps(attrs, widgetType, tokenMapping, fontResolution, imageM
           if (c) props['color'] = c;
         }
       } else {
-        // Statische Fallbacks — keine styleMap verfügbar oder leer
-        if (widgetType === 'e-heading') {
-          props['font-family'] = wrapType('string', 'Inter');
-          props['font-size']   = wrapSize('32px');
-          props['font-weight'] = wrapType('string', '600');
-          props['color']       = wrapColor('#111111');
+        // Sprint 20 (Punkt #7): WP-Theme-Defaults statt hartkodierter Werte,
+        // falls --theme-defaults bereitgestellt wurde (z. B. von einem Agenten
+        // mit Live-MCP-Zugriff via novamira/adrians-get-theme-defaults o.ä.
+        // befüllt). Schema: { heading: {...}, body: {...} } — gleiche Felder
+        // wie ein styleMap-Eintrag (fontFamily/fontSize/fontWeight/color/...).
+        const themeKey = widgetType === 'e-heading' ? 'heading' : 'body';
+        const themeDefault = themeDefaults?.[themeKey];
+
+        if (themeDefault) {
+          log(`RC-11 Theme-Default (${themeKey}): aus --theme-defaults statt hartkodiertem Fallback`);
+          if (themeDefault.fontFamily) {
+            const ff = String(themeDefault.fontFamily).split(',')[0].trim().replace(/['"]/g, '');
+            const resolved = resolveFont(ff, tokenMapping, fontResolution);
+            props['font-family'] = resolved || wrapType('string', ff);
+          }
+          if (themeDefault.fontSize)   props['font-size']   = wrapSize(themeDefault.fontSize);
+          if (themeDefault.fontWeight) props['font-weight'] = wrapType('string', String(themeDefault.fontWeight));
+          if (themeDefault.lineHeight) props['line-height'] = resolveLineHeight(themeDefault.lineHeight);
+          if (themeDefault.color) {
+            const c = resolveColor(themeDefault.color, tokenMapping);
+            if (c) props['color'] = c;
+          }
+          // Fehlende Einzelfelder im Theme-Default mit statischen Defaults auffüllen
+          if (!props['font-family']) props['font-family'] = wrapType('string', 'Inter');
+          if (!props['font-size'])   props['font-size']   = wrapSize(widgetType === 'e-heading' ? '32px' : '16px');
+          if (!props['color'])       props['color']       = wrapColor(widgetType === 'e-heading' ? '#111111' : '#444444');
         } else {
-          props['font-family'] = wrapType('string', 'Inter');
-          props['font-size']   = wrapSize('16px');
-          props['line-height'] = wrapUnitless(1.6);
-          props['color']       = wrapColor('#444444');
+          // Statische Fallbacks — weder styleMap noch --theme-defaults verfügbar
+          if (widgetType === 'e-heading') {
+            props['font-family'] = wrapType('string', 'Inter');
+            props['font-size']   = wrapSize('32px');
+            props['font-weight'] = wrapType('string', '600');
+            props['color']       = wrapColor('#111111');
+          } else {
+            props['font-family'] = wrapType('string', 'Inter');
+            props['font-size']   = wrapSize('16px');
+            props['line-height'] = wrapUnitless(1.6);
+            props['color']       = wrapColor('#444444');
+          }
         }
       }
     } else if (widgetType === 'e-button') {
@@ -945,7 +991,7 @@ function extractComponentText(attrs) {
  * @param {object|null} [styleMap=null] - Style-Map aus getProjectXml() TextStyles/ColorStyles
  * @returns {object} V4-Element mit type, elType, widgetType, id, settings, styles, elements
  */
-function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0, styleMap = null) {
+function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0, styleMap = null, themeDefaults = null) {
   const { attrs } = xmlNode;
   // Bug 1+8 Fix: resolve text from component attrs > explicit text attr > child text
   const compText = extractComponentText(attrs);
@@ -970,7 +1016,7 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0,
   // NOTE: buildStyleProps() is the richer version of v4-tree-builder's
   // mapFramerStyleToV4Props() — it adds Bug 3 (GC warnings), RC-08 (position),
   // RC-11 (text fallbacks), RC-09 (grid detection), and C2 grid support.
-  const props = buildStyleProps(enrichedAttrs, widgetType, tokenMapping, fontResolution, imageMap, xmlNode, styleMap, widgetId);
+  const props = buildStyleProps(enrichedAttrs, widgetType, tokenMapping, fontResolution, imageMap, xmlNode, styleMap, widgetId, themeDefaults);
 
   // ── Settings ──
   const settings = {
@@ -1059,7 +1105,7 @@ function convertNode(xmlNode, tokenMapping, fontResolution, imageMap, depth = 0,
     // Bug 3 Fix: recursively unwrap any chain of pass-through containers
     const resolved = resolvePassThrough(child, depth + 1);
     for (const r of resolved) {
-      const converted = convertNode(r.node, tokenMapping, fontResolution, imageMap, r.depth, styleMap);
+      const converted = convertNode(r.node, tokenMapping, fontResolution, imageMap, r.depth, styleMap, themeDefaults);
       if (converted) v4Children.push(converted);
     }
   }
@@ -1413,6 +1459,23 @@ if (styleMapIsEmpty && (args['framer-url'] || args['framer-html'])) {
   }
 }
 
+// Sprint 20 (Punkt #7): Optionale WP-Theme-Defaults laden.
+// Greift NUR, wenn weder styleMap noch CSS-Fallback einen passenden Wert
+// liefern (letzter Fallback-Schritt in der RC-11-Kette, siehe buildStyleProps).
+let themeDefaults = null;
+if (args['theme-defaults']) {
+  if (fs.existsSync(args['theme-defaults'])) {
+    try {
+      themeDefaults = JSON.parse(fs.readFileSync(args['theme-defaults'], 'utf8'));
+      log(`Theme-Defaults geladen: ${Object.keys(themeDefaults).join(', ')}`);
+    } catch (e) {
+      warn(`--theme-defaults konnte nicht gelesen werden: ${e.message}`);
+    }
+  } else {
+    warn(`--theme-defaults Datei nicht gefunden: ${args['theme-defaults']}`);
+  }
+}
+
 // ─────────────────────────────────────────────
 // CONVERT
 // ─────────────────────────────────────────────
@@ -1434,7 +1497,7 @@ log(`XML nodes parsed: ${xmlRoots.length} root node(s)`);
 // Convert each root node
 const v4Tree = xmlRoots
   .filter(n => n.tagName && n.tagName !== '_root')
-  .map(n => convertNode(n, tokenMapping, fontResolution, imageMap, 0, styleMap));
+  .map(n => convertNode(n, tokenMapping, fontResolution, imageMap, 0, styleMap, themeDefaults));
 
 // C6: Token-to-GV Substitution Pass (Root-Cause Fix)
 // Replaces hardcoded hex values with e-gv-XXXXXXXX references
@@ -1468,13 +1531,20 @@ if (outputPath) {
   if (args.output) process.stderr.write(`Saved to ${outputPath}\n`);
 }
 
-// Fix #1 (repair): GC-Kandidaten als Begleitdatei schreiben (--prefer-gc Modus).
-// generate-global-classes.js liest diese via --gc-candidates um background-Werte
-// zu erkennen, die bewusst NICHT als lokaler Style im Tree stehen.
+// Fix #1 (repair) + Sprint 20 (generalisiert): GC-Kandidaten als Begleitdatei
+// schreiben (--prefer-gc Modus). generate-global-classes.js liest diese via
+// --gc-candidates um Werte zu erkennen, die bewusst NICHT als lokaler Style
+// im Tree stehen. Schema ist generisch nach Kategorie gruppiert (nicht mehr
+// hartkodiert auf 'background'), siehe CONVENTIONS.md Abschnitt 3.
 if (preferGcForBackground && pendingGcCandidates.length > 0 && outputPath) {
   const candidatesPath = outputPath.replace(/\.json$/, '') + '.gc-candidates.json';
-  fs.writeFileSync(candidatesPath, JSON.stringify({ background: pendingGcCandidates }, null, 2), 'utf8');
-  process.stderr.write(`✓ ${pendingGcCandidates.length} GC-Kandidat(en) (background) → ${candidatesPath}\n`);
+  const byCategory = {};
+  for (const c of pendingGcCandidates) {
+    const cat = c.category || 'background'; // Fallback für ältere Aufrufer
+    (byCategory[cat] ||= []).push(c);
+  }
+  fs.writeFileSync(candidatesPath, JSON.stringify(byCategory, null, 2), 'utf8');
+  process.stderr.write(`✓ ${pendingGcCandidates.length} GC-Kandidat(en) (${Object.keys(byCategory).join(', ')}) → ${candidatesPath}\n`);
   process.stderr.write(`  Nutze: generate-global-classes.js --tree ${args.output || outputPath} --gc-candidates ${candidatesPath}\n`);
 }
 
