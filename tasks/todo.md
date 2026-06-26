@@ -1,10 +1,10 @@
-# tasks/todo.md — framer-v4-pipeline-v2 Audit
+# tasks/todo.md — Framer-to-Elementor-V4-Pipeline Audit
 
 > **Erstellt:** 2026-06-12 (Claude Sonnet 4.6 — vollständige Repo-Analyse)  
-> **Zuletzt aktualisiert:** 2026-06-12 (alle Fixes committed)  
+> **Zuletzt aktualisiert:** 2026-06-26
 > **Basis:** Gründliche Analyse aller 40 JS-Dateien, 3 PHP-Files, CI-Workflow, Doku  
-> **Repo:** https://github.com/Adilinu94/Test1206  
-> **Pipeline-Version:** v0.7.0
+> **Repo:** https://github.com/Adilinu94/Framer-to-Elementor-V4-Pipeline  
+> **Pipeline-Version:** 0.2.0
 
 ---
 
@@ -122,7 +122,7 @@
 - [x] `reports/`, `animation-plan.json`, `rollback-plan.json`, `.pipeline/`, `mcp-server-config.json` ergänzt
 - [x] Fix committed
 
-### DX-4 — Novamira Skill-Version `"1.0"` passt nicht zu Pipeline-Version `0.7.0`
+### DX-4 — Novamira Skill-Version `"1.0"` passt nicht zu Pipeline-Version `0.2.0`
 - [x] `framer-v4-pipeline.md`: `version: "0.7.0"` + `pipeline_min_version: "0.7.0"` gesetzt
 - [x] Cache-Hinweis: `McpDesignSystemCache` statt `mcp-bridge.js` + korrekter Pfad
 - [x] Fix committed
