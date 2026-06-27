@@ -1,9 +1,9 @@
 ---
 slug: framer-v4-pipeline
 title: Framer V4 Pipeline Workflow
-description: Vollstaendiger Workflow fuer die Konvertierung einer Framer-Seite nach Elementor V4 mit dem framer-v4-pipeline-v2 Repository. Enthaelt alle 18 Schritte, Entscheidungslogik, kritische Invarianten und Fehlerbehandlung. Aktualisiert fuer Novamira Adrians Extra v1.0.0.
-version: "0.7.0"
-pipeline_min_version: "0.7.0"
+description: Vollstaendiger Workflow fuer die Konvertierung einer Framer-Seite nach Elementor V4. v0.21.0: 434 Tests, Sprint 19+20 Fixes, --resume Support, dual-source (Framer-Export + Unframer), novamira-adrianv2 (WordPress_mcp_adrian).
+version: "0.21.0"
+pipeline_min_version: "0.21.0"
 tags: [framer, elementor, v4, pipeline, mcp, novamira]
 ---
 
@@ -60,7 +60,7 @@ Dieser Skill ersetzt das manuelle Nachschlagen in BLUEPRINT.md.
 
 ### Phase 1: Setup
 ```
-node framer-v4-pipeline-v2/wizard.js
+node Framer-to-Elementor-V4-Pipeline/wizard.js
 ```
 Fragt: Framer-URL, Scope, WordPress-Umgebung (testseite|treetsshop), Post-ID
 
