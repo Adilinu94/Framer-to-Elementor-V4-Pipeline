@@ -26,6 +26,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPTS   = join(__dirname, '..', 'scripts');
+const SRC_CLI     = join(__dirname, '..', 'src', 'cli');
+const SRC_BUILDER = join(__dirname, '..', 'src', 'builder');
 const toFileUrl = (p) => pathToFileURL(p).href;
 const NODE      = process.execPath;
 
@@ -1550,14 +1552,14 @@ describe('Sprint 6: wizard.js batch subcommand', () => {
 
 describe('Sprint 6: wizard.js modular structure', () => {
   test('S6: wizard/cmd-dry-run.js is executable', () => {
-    const p = join(SCRIPTS, 'wizard', 'cmd-dry-run.js');
+    const p = join(SRC_CLI, 'cmd-dry-run.ts');
     assert.ok(existsSync(p), `cmd-dry-run.js exists`);
     const content = readFileSync(p, 'utf8');
     assert.ok(content.includes('runDryRun'), 'Exports runDryRun');
   });
 
   test('S6: wizard/cmd-batch.js has empty pages guard', () => {
-    const p = join(SCRIPTS, 'wizard', 'cmd-batch.js');
+    const p = join(SRC_CLI, 'cmd-batch.ts');
     const content = readFileSync(p, 'utf8');
     assert.ok(content.includes('--pages erfordert'), 'Has --pages validation');
     assert.ok(content.includes('!pagesList || !pagesList.trim()'), 'Has empty guard');
@@ -2038,7 +2040,7 @@ describe('S37: Sprint 15 — FramerExport Cache Tests', () => {
   test('SP15: callParallel dead fallback updated to 5', async () => {
     const { McpBridge } = await import(toFileUrl(join(SCRIPTS, 'lib', 'mcp-bridge.js')));
     // Verify the source code has defaultConcurrency ?? 5, not ?? 3
-    const src = readFileSync(join(SCRIPTS, 'lib', 'mcp-bridge.ts'), 'utf8');
+    const src = readFileSync(join(SRC_BUILDER, 'mcp-bridge.ts'), 'utf8');
     assert.ok(
       !src.includes('this.defaultConcurrency ?? 3') && !src.includes('concurrency ?? 3'),
       'Dead fallback ?? 3 should be removed from callParallel'
