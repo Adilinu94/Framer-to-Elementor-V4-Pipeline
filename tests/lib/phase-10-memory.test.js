@@ -9,8 +9,8 @@ import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createMemoryStore } from '../../scripts/lib/auto-memory-save.js';
-import { runQuarterlyAudit } from '../../scripts/quarterly-audit.js';
+import { createMemoryStore } from '../../scripts/lib/auto-memory-save.ts';
+import { runQuarterlyAudit } from '../../scripts/quarterly-audit.ts';
 
 after(() => {
   // Cleanup is per-test via rmSync in each test

@@ -12,8 +12,8 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 
-import { generateBuildReport } from '../../scripts/wizard/build-report.js';
-import { loadReplay, saveReplay, listReplays, runReplay } from '../../scripts/wizard/replay.js';
+import { generateBuildReport } from '../../scripts/wizard/build-report.ts';
+import { loadReplay, saveReplay, listReplays, runReplay } from '../../scripts/wizard/replay.ts';
 
 // ─────────────────────────────────────────────
 // Phase 6.2 — build-report

@@ -17,7 +17,7 @@ import {
   buildStyleClass,
   buildDesktopVariant,
   mapFramerStyleToV4Props,
-} from '../../scripts/lib/v4-tree-builder.js';
+} from '../../scripts/lib/v4-tree-builder.ts';
 import {
   wrapHtmlContent,
   wrapImage,
@@ -28,7 +28,7 @@ import {
   sanitizeStyleId,
   wrapClasses,
   parseFramerPrefix,
-} from '../../scripts/lib/framer-utils.js';
+} from '../../scripts/lib/framer-utils.ts';
 
 // ─────────────────────────────────────────────
 // Phase 8.2 — Snapshot-Tests für V4-Tree-Output

@@ -1,6 +1,21 @@
 # Changelog — framer-v4-pipeline-v2
 
-## [v0.21.0] — 2026-06-17
+## [Unreleased]
+
+### Fixed — Test-Infrastruktur nach TS-Migration (91 → 0 Fails)
+
+Die TypeScript-Migration (`scripts/**/*.js` → `.ts`, Commit `132a302d`) hatte 19 Testdateien mit 26 Pfad-Referenzen nicht nachgezogen — `npm test` lief seither mit 91/195 Fails, unbemerkt weil niemand `npm test` (statt nur `pipeline.test.js`) vollständig ausgeführt hatte. Root Cause einheitlich, aber zwei verschiedene Fehlerbilder:
+
+- **16 `tests/lib/*.test.js`-Dateien**: `import`/`await import()` auf `.js`-Pfade, die nicht mehr existieren → `ERR_MODULE_NOT_FOUND`, ganze Datei bricht ab, keine Subtests laufen.
+- **`sprint19-fixes.test.js`, `phase-1-bug-2-regression.test.js`, `inspect-v4-schemas.test.js`, `tests/lib/prio1-prio2.test.js`**: `spawnSync`/`execFileSync` auf `.js`-Pfade ohne `--import tsx` → Kindprozess scheitert still, zeigt sich erst 2-3 Assertions später als scheinbar unabhängiges Symptom (falscher Exit-Code, fehlende Output-Datei).
+
+Fix: `.js` → `.ts` in allen 26 Referenzen + `--import tsx` an jedem Kindprozess-Spawn (mirrort das bereits bestehende, bewährte Muster aus `pipeline.test.js`s `runFromRoot()`). Zusätzlich `--import tsx` in alle `node --test`-Scripts in `package.json` ergänzt (fehlte komplett — Node 22 kann `.ts` zwar nativ laden, löst aber keine verschachtelten NodeNext-`.js`→`.ts`-Imports auf, das kann nur der tsx-Loader).
+
+Separat: `tools/framer-export` fehlte lokal installiert (`chalk` nicht gefunden) — kein Code-Bug, nur `npm install --prefix tools/framer-export` nachgeholt (macht die CI ohnehin separat).
+
+**Ergebnis:** `npm test` → **492/492 grün** (vorher 195 Tests total, 91 fail — die vorher abstürzenden Dateien geben jetzt ihre echten Subtests frei, daher mehr Tests insgesamt). Kein Produktionscode angefasst (`scripts/`, `src/` unverändert) — reiner Test-Infrastruktur-Fix.
+
+
 
 ### Sprint 18 — E2E-Verbesserungsbericht-Umsetzung (16 Items P1+P2+P3)
 

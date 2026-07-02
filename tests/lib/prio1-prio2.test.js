@@ -39,7 +39,7 @@ function tmpFile(dir, name, content) {
 
 function run(script, args = [], { expectFail = false } = {}) {
   try {
-    const out = execFileSync(NODE, [join(SCRIPTS, script), ...args], {
+    const out = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, script.replace(/\.js$/, '.ts')), ...args], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 15000,
@@ -53,7 +53,7 @@ function run(script, args = [], { expectFail = false } = {}) {
 
 function runXmlString(script, xmlContent, extraArgs = [], { expectFail = false } = {}) {
   try {
-    const out = execFileSync(NODE, [join(SCRIPTS, script), '--xml-string', xmlContent, ...extraArgs], {
+    const out = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, script.replace(/\.js$/, '.ts')), '--xml-string', xmlContent, ...extraArgs], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 15000,
@@ -148,7 +148,7 @@ describe('S38: Bug 3 Fix — background-color in V4 Style gesetzt', () => {
 
     let stderr = '';
     try {
-      execFileSync(NODE, [join(SCRIPTS, 'convert-xml-to-v4.js'), '--xml', xmlPath], {
+      execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'convert-xml-to-v4.ts'), '--xml', xmlPath], {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],
         timeout: 15000,
@@ -172,7 +172,7 @@ describe('S38: Bug 3 Fix — background-color in V4 Style gesetzt', () => {
     const xml = `<Frame id="x" backgroundColor="#ff0000" width="100px" height="100px" />`;
     const xmlPath = tmpFile(dir, 'frame.xml', xml);
 
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'convert-xml-to-v4.js'), '--xml', xmlPath], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'convert-xml-to-v4.ts'), '--xml', xmlPath], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 15000,
@@ -263,7 +263,8 @@ describe('S39: inlineTextStyle-Auflösung via styleMap', () => {
     let stderr = '';
     try {
       execFileSync(NODE, [
-        join(SCRIPTS, 'convert-xml-to-v4.js'),
+        '--import', 'tsx',
+        join(SCRIPTS, 'convert-xml-to-v4.ts'),
         '--xml', xmlPath,
         '--style-map', join(dir, 'nonexistent.json'),
       ], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 15000 });
@@ -294,7 +295,8 @@ describe('S39: inlineTextStyle-Auflösung via styleMap', () => {
     const styleMapPath = tmpFile(dir, 'style-map.json', styleMap);
 
     const stdout = execFileSync(NODE, [
-      join(SCRIPTS, 'convert-xml-to-v4.js'),
+      '--import', 'tsx',
+      join(SCRIPTS, 'convert-xml-to-v4.ts'),
       '--xml', xmlPath,
       '--style-map', styleMapPath,
     ], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 15000 });
@@ -399,7 +401,7 @@ describe('S40: extract-style-map.js — TextStyles + ColorStyles extrahieren', (
     const dir = tmpDir('esm-empty');
     const xmlPath = tmpFile(dir, 'empty.xml', '<Project></Project>');
 
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'extract-style-map.js'), '--xml', xmlPath], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'extract-style-map.ts'), '--xml', xmlPath], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 15000,
@@ -420,7 +422,7 @@ describe('S40: extract-style-map.js — TextStyles + ColorStyles extrahieren', (
     </Project>`;
     const xmlPath = tmpFile(dir, 'project.xml', xml);
 
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'extract-style-map.js'), '--xml', xmlPath], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'extract-style-map.ts'), '--xml', xmlPath], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 15000,
@@ -532,7 +534,7 @@ describe('S41: expand-components.js — Component-Plan erstellen', () => {
 
 describe('S42: session-init.js — Preflight-Plan', () => {
   test('session-init: --json gibt valides JSON zurück', () => {
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'session-init.js'), '--json'], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'session-init.ts'), '--json'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 10000,
@@ -545,7 +547,7 @@ describe('S42: session-init.js — Preflight-Plan', () => {
   });
 
   test('session-init: --json Plan enthält 3 Schritte', () => {
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'session-init.js'), '--json'], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'session-init.ts'), '--json'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 10000,
@@ -556,7 +558,7 @@ describe('S42: session-init.js — Preflight-Plan', () => {
   });
 
   test('session-init: --json Plan enthält elementor-check-setup', () => {
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'session-init.js'), '--json'], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'session-init.ts'), '--json'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 10000,
@@ -571,7 +573,7 @@ describe('S42: session-init.js — Preflight-Plan', () => {
   });
 
   test('session-init: --json result_template enthält alle Pflichtfelder', () => {
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'session-init.js'), '--json'], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'session-init.ts'), '--json'], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 10000,
@@ -588,7 +590,7 @@ describe('S42: session-init.js — Preflight-Plan', () => {
   });
 
   test('session-init: ohne --json gibt lesbaren Preflight-Plan aus', () => {
-    const stdout = execFileSync(NODE, [join(SCRIPTS, 'session-init.js')], {
+    const stdout = execFileSync(NODE, ['--import', 'tsx', join(SCRIPTS, 'session-init.ts')], {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 10000,
@@ -636,7 +638,8 @@ describe('S43: convert-xml-to-v4.js --style-map Integration', () => {
     });
 
     const stdout = execFileSync(NODE, [
-      join(SCRIPTS, 'convert-xml-to-v4.js'),
+      '--import', 'tsx',
+      join(SCRIPTS, 'convert-xml-to-v4.ts'),
       '--xml', xmlPath,
       '--style-map', styleMapPath,
     ], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 15000 });
@@ -654,7 +657,8 @@ describe('S43: convert-xml-to-v4.js --style-map Integration', () => {
     let stdout = '';
     try {
       stdout = execFileSync(NODE, [
-        join(SCRIPTS, 'convert-xml-to-v4.js'),
+        '--import', 'tsx',
+        join(SCRIPTS, 'convert-xml-to-v4.ts'),
         '--xml', xmlPath,
         '--style-map', '/nonexistent/style-map.json',
       ], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 15000 });

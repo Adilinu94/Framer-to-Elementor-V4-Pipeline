@@ -20,7 +20,7 @@ import {
   runParallel,
   nodeBin,
   findWorkspaceRoot,
-} from '../../scripts/wizard/shared.js';
+} from '../../scripts/wizard/shared.ts';
 
 // ─────────────────────────────────────────────
 // findFramerExportDir

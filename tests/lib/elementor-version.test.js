@@ -11,7 +11,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 // Module wird via --experimental-loader ESM geladen — workaround via dynamic import
-const { detectElementorVersion, clearElementorCache } = await import('../../scripts/lib/elementor-version.js');
+const { detectElementorVersion, clearElementorCache } = await import('../../scripts/lib/elementor-version.ts');
 
 test('elementor-version: Fallback ohne mcpBridge liefert default-Strategy', async () => {
   const env = await detectElementorVersion({ mcpBridge: null });
@@ -25,7 +25,7 @@ test('elementor-version: parseCheckSetup mit echten Live-Daten (test4)', async (
   const env = await detectElementorVersion({ mcpBridge: null });
   // Mock-Live-Daten simulieren via internal call
   // Wir testen die Strategy-Decision direkt mit manuellen Daten
-  const { parseCheckSetup: _parseCheckSetup } = await import('../../scripts/lib/elementor-version.js').catch(() => ({}));
+  const { parseCheckSetup: _parseCheckSetup } = await import('../../scripts/lib/elementor-version.ts').catch(() => ({}));
   // Da parseCheckSetup nicht exportiert, testen wir ueber detectElementorVersion mit null-bridge
   // und prufen die Strategy-Defaults
   assert.equal(env.strategy.activate_phase3, false);  // unknown version → conservative

@@ -35,7 +35,8 @@ const SCRIPTS   = join(__dirname, '..', 'scripts');
 const NODE      = process.execPath;
 
 function run(script, args = [], { expectFail = false, timeout = 20000 } = {}) {
-  const result = spawnSync(NODE, [join(SCRIPTS, script), ...args], {
+  const scriptPath = join(SCRIPTS, script.replace(/\.js$/, '.ts'));
+  const result = spawnSync(NODE, ['--import', 'tsx', scriptPath, ...args], {
     encoding: 'utf8',
     timeout,
   });

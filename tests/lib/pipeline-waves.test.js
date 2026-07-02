@@ -11,7 +11,7 @@ import {
   runWave1FramerSource,
   runWave3Build,
   runWave4DeployQa,
-} from '../../scripts/lib/pipeline-waves.js';
+} from '../../scripts/lib/pipeline-waves.ts';
 
 function makeFetcher(map) {
   return async (ability) => {

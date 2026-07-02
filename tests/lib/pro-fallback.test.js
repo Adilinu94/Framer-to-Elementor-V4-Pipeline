@@ -12,7 +12,7 @@ const {
   applyProFallback,
   maybeApplyProFallback,
   listProFeatures,
-} = await import('../../scripts/lib/pro-fallback.js');
+} = await import('../../scripts/lib/pro-fallback.ts');
 
 test('pro-fallback: Loop Grid → e-flexbox', () => {
   const det = detectProFeature({ name: 'Loop Grid', widgetType: 'loop-grid' });

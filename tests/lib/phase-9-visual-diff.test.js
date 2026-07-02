@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { computePixelDiff, hashImage, compareImages } from '../../scripts/lib/visual-diff.js';
+import { computePixelDiff, hashImage, compareImages } from '../../scripts/lib/visual-diff.ts';
 
 function makeImage(width, height, fillRgb = [255, 255, 255]) {
   const channels = 3;

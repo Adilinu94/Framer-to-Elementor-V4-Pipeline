@@ -17,7 +17,7 @@ import {
   cachedGetTextStyles,
   clearFramerCache,
   getFramerCacheStats,
-} from '../../scripts/lib/framer-cache.js';
+} from '../../scripts/lib/framer-cache.ts';
 
 function makeTmpCache() {
   const dir = join(tmpdir(), 'framer-cache-test-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));

@@ -21,8 +21,8 @@ import {
   buildDesktopVariant,
   mapFramerStyleToV4Props,
   wrapClasses,
-} from '../../scripts/lib/v4-tree-builder.js';
-import { sanitizeStyleId, isValidStyleId } from '../../scripts/lib/framer-utils.js';
+} from '../../scripts/lib/v4-tree-builder.ts';
+import { sanitizeStyleId, isValidStyleId } from '../../scripts/lib/framer-utils.ts';
 
 // ─────────────────────────────────────────────
 // Phase 1.5 — sanitizeStyleId + Invariant III

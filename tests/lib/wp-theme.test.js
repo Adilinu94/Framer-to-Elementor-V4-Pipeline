@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-const { detectActiveTheme, clearThemeCache } = await import('../../scripts/lib/wp-theme.js');
+const { detectActiveTheme, clearThemeCache } = await import('../../scripts/lib/wp-theme.ts');
 
 test('wp-theme: Fallback ohne mcpBridge liefert unknown-Theme', async () => {
   const env = await detectActiveTheme({ mcpBridge: null });

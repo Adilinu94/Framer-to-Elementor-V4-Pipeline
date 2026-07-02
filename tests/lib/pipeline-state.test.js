@@ -30,7 +30,7 @@ import {
   clearArtifacts,
   PIPELINE_PHASES,
   STATE_VERSION,
-} from '../../scripts/lib/pipeline-state.js';
+} from '../../scripts/lib/pipeline-state.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -15,7 +15,7 @@ import {
   batchUploadImages,
   resolveImage,
   clearImageMap,
-} from '../../scripts/lib/asset-batch-uploader.js';
+} from '../../scripts/lib/asset-batch-uploader.ts';
 
 function makeMcpBridge({ responseMap = {}, failFor = [] } = {}) {
   let calls = 0;

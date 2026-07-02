@@ -17,12 +17,13 @@ import { dirname, join, resolve } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = resolve(__dirname, '..');
-const SCRIPT = join(ROOT, 'scripts', 'inspect-v4-schemas.js');
+const SCRIPT = join(ROOT, 'scripts', 'inspect-v4-schemas.ts');
 const TMP_OUTPUT = join(ROOT, 'tmp', 'test-v4-atomic-schema.json');
 
 test('inspect-v4-schemas runs cleanly and writes the aggregated schema', async () => {
   await rm(TMP_OUTPUT, { force: true });
   const res = spawnSync(process.execPath, [
+    '--import', 'tsx',
     SCRIPT,
     '--fixtures', join('tests', 'fixtures', 'v4-atomic', 'working-pages'),
     '--output', join('tmp', 'test-v4-atomic-schema.json'),
@@ -79,6 +80,7 @@ test('inspect-v4-schemas --strict fails when a fixture violates an invariant', a
   await wf(join(badDir, 'bad-heading.json'), JSON.stringify(bad));
 
   const res = spawnSync(process.execPath, [
+    '--import', 'tsx',
     SCRIPT,
     '--fixtures', 'tmp/test-bad-fixtures',
     '--output', 'tmp/test-bad-schema.json',

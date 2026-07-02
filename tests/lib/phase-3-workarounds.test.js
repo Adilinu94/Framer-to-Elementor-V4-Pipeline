@@ -16,20 +16,20 @@ import {
   generateCssFromV4Tree,
   generateMuPluginContent,
   createWpCssInjector,
-} from '../../scripts/lib/wp-css-injector.js';
+} from '../../scripts/lib/wp-css-injector.ts';
 
 import {
   isFoundationError,
   generateLocalFoundationCss,
   createFoundationResilience,
-} from '../../scripts/lib/foundation-resilience.js';
+} from '../../scripts/lib/foundation-resilience.ts';
 
 import {
   isMethodMissingError,
   basicA11yCheck,
   basicSeoCheck,
   createAuditResilience,
-} from '../../scripts/lib/audit-resilience.js';
+} from '../../scripts/lib/audit-resilience.ts';
 
 // ─────────────────────────────────────────────
 // Phase 3.1 — CSS Generation

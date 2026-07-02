@@ -24,7 +24,7 @@ import { mkdtempSync, writeFileSync, rmSync, existsSync, renameSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { UnframerBridge } from '../../scripts/lib/unframer-bridge.js';
+import { UnframerBridge } from '../../scripts/lib/unframer-bridge.ts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

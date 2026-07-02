@@ -11,8 +11,8 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createErrorTracker, CATEGORIES, classifyAbility } from '../../scripts/lib/error-tracker.js';
-import { getHealthStatus } from '../../scripts/wizard/health.js';
+import { createErrorTracker, CATEGORIES, classifyAbility } from '../../scripts/lib/error-tracker.ts';
+import { getHealthStatus } from '../../scripts/wizard/health.ts';
 
 // ─────────────────────────────────────────────
 // Phase 7.2 — Error Tracker

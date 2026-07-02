@@ -42,8 +42,8 @@ const FRAMER_XML_WITH_COMPONENT = `<Frame componentId="abc123def" componentName=
 test('Phase 1 Bug #2: e-component elType is "widget", not "e-component"', async () => {
   const { spawnSync } = await import('node:child_process');
   const out = resolve(ROOT, 'tmp', 'phase-1-bug-2-output.json');
-  const result = spawnSync('node', [
-    resolve(ROOT, 'scripts/convert-xml-to-v4.js'),
+  const result = spawnSync('node', ['--import', 'tsx',
+    resolve(ROOT, 'scripts/convert-xml-to-v4.ts'),
     '--xml-string', FRAMER_XML_WITH_COMPONENT,
     '--output', out,
   ], { encoding: 'utf8' });
@@ -76,8 +76,8 @@ test('Phase 1 Bug #2: e-flexbox and e-div-block keep element-type elType', async
       <Frame name="GridChild" display="grid"></Frame>
     </Frame>
   </Frame>`;
-  const result = spawnSync('node', [
-    resolve(ROOT, 'scripts/convert-xml-to-v4.js'),
+  const result = spawnSync('node', ['--import', 'tsx',
+    resolve(ROOT, 'scripts/convert-xml-to-v4.ts'),
     '--xml-string', xml,
     '--output', out,
   ], { encoding: 'utf8' });
@@ -111,8 +111,8 @@ test('Phase 1 Bug #2: e-heading keeps elType=widget (regression check)', async (
   const xml = `<Frame name="Root">
     <Frame name="TitleNode" text="Hello">Hello</Frame>
   </Frame>`;
-  spawnSync('node', [
-    resolve(ROOT, 'scripts/convert-xml-to-v4.js'),
+  spawnSync('node', ['--import', 'tsx',
+    resolve(ROOT, 'scripts/convert-xml-to-v4.ts'),
     '--xml-string', xml,
     '--output', out,
   ], { encoding: 'utf8' });
